@@ -7,19 +7,17 @@ app.use(cors());
 app.use(express.json());
 
 const CK_USER_ID = 'CK101282816';
-const CK_API_TOKEN = 'LN9R04NUVN2ZRI172944E64LPMVN5Y731Q3CVE3J8ZF33Q5LC4C55T7N9D22A983';
-const CK_BASE = 'https://www.clubkonnect.com/API';
+const CK_API_KEY = 'LN9R04NUVN2ZRI172944E64LPMVN5Y731Q3CVE3J8ZF33Q5LC4C55T7N9D22A983';
+const CK_BASE = 'https://www.nellobytesystems.com';
 
-// Health check
 app.get('/', (req, res) => {
-  res.json({ status: 'QuickTop backend is running ✅' });
+  res.json({ status: 'QuickTop backend running ✅' });
 });
 
-// Buy Airtime
 app.get('/airtime', async (req, res) => {
   try {
     const { network, amount, phone, ref } = req.query;
-    const url = `${CK_BASE}/airtime.asp?UserID=${CK_USER_ID}&APIToken=${CK_API_TOKEN}&MobileNetwork=${network}&Amount=${amount}&MobileNumber=${phone}&RequestID=${ref}`;
+    const url = `${CK_BASE}/APIAirtimeV1.asp?UserID=${CK_USER_ID}&APIKey=${CK_API_KEY}&MobileNetwork=${network}&Amount=${amount}&MobileNumber=${phone}&RequestID=${ref}`;
     const response = await fetch(url);
     const text = await response.text();
     let data;
@@ -30,11 +28,10 @@ app.get('/airtime', async (req, res) => {
   }
 });
 
-// Buy Data Bundle
 app.get('/data', async (req, res) => {
   try {
     const { network, plan, phone, ref } = req.query;
-    const url = `${CK_BASE}/databundle.asp?UserID=${CK_USER_ID}&APIToken=${CK_API_TOKEN}&MobileNetwork=${network}&DataPlan=${plan}&MobileNumber=${phone}&RequestID=${ref}`;
+    const url = `${CK_BASE}/APIDatabundleV1.asp?UserID=${CK_USER_ID}&APIKey=${CK_API_KEY}&MobileNetwork=${network}&DataPlan=${plan}&MobileNumber=${phone}&RequestID=${ref}`;
     const response = await fetch(url);
     const text = await response.text();
     let data;
@@ -45,10 +42,9 @@ app.get('/data', async (req, res) => {
   }
 });
 
-// Check Wallet Balance
 app.get('/balance', async (req, res) => {
   try {
-    const url = `${CK_BASE}/walletbalance.asp?UserID=${CK_USER_ID}&APIToken=${CK_API_TOKEN}`;
+    const url = `${CK_BASE}/APIWalletBalanceV1.asp?UserID=${CK_USER_ID}&APIKey=${CK_API_KEY}`;
     const response = await fetch(url);
     const text = await response.text();
     let data;
