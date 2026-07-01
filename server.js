@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 const CK_USER_ID = 'CK101282816';
-const CK_API_KEY = 'LN9R04NUVN2ZRI172944E64LPMVN5Y731Q3CVE3J8ZF33Q5LC4C55T7N9D22A983';
+const CK_API_KEY = 'H00QE5HWM1V2LA60MXTA467O025IM9FC53117211AROXL4MM33NQ4E68B704H7VT';
 const CK_BASE = 'https://www.nellobytesystems.com';
 
 app.get('/', (req, res) => {
