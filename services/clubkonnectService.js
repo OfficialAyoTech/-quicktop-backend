@@ -12,15 +12,20 @@ const getWalletBalance = async () => {
             `?UserID=${USER_ID}` +
             `&APIKey=${API_KEY}`;
 
+        console.log("Calling URL:", url);
+
         const response = await httpClient.get(url);
 
         return response.data;
 
     } catch (error) {
 
-        console.error("ClubKonnect Error:", error.message);
+        console.log("========== CLUBKONNECT ERROR ==========");
+        console.log("Status:", error.response?.status);
+        console.log("Data:", error.response?.data);
+        console.log("Message:", error.message);
 
-        throw new Error("Unable to connect to ClubKonnect.");
+        throw error;
     }
 };
 
