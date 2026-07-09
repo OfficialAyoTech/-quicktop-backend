@@ -3,10 +3,10 @@ const { getAuth } = require("firebase-admin/auth");
 
 const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
 
-initializeApp({
+const app = initializeApp({
   credential: cert(serviceAccount),
 });
 
-module.exports = {
-  getAuth,
-};
+const auth = getAuth(app);
+
+module.exports = auth;

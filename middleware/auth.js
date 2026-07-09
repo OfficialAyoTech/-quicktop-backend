@@ -1,4 +1,4 @@
-const { auth } = require("../config/firebase");
+const auth = require("../config/firebase");
 
 const authenticateUser = async (req, res, next) => {
   try {
@@ -20,14 +20,12 @@ const authenticateUser = async (req, res, next) => {
     next();
 
   } catch (error) {
-
     console.error(error);
 
     return res.status(401).json({
       success: false,
       message: error.message
     });
-
   }
 };
 
