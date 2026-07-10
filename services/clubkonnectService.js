@@ -5,30 +5,34 @@ const USER_ID = process.env.CK_USER_ID;
 const API_KEY = process.env.CK_API_KEY;
 
 const getWalletBalance = async () => {
-    try {
+  try {
+    const url =
+      `${BASE_URL}/APIWalletBalanceV1.asp` +
+      `?UserID=${USER_ID}` +
+      `&APIKey=${API_KEY}`;
 
-        const url =
-            `${BASE_URL}/APIWalletBalanceV1.asp` +
-            `?UserID=${USER_ID}` +
-            `&APIKey=${API_KEY}`;
+    console.log("==================================");
+    console.log("Calling URL:", url);
 
-        console.log("Calling URL:", url);
+    const response = await httpClient.get(url);
 
-        const response = await httpClient.get(url);
+    console.log("SUCCESS:");
+    console.log(response.data);
 
-        return response.data;
+    return response.data;
 
-    } catch (error) {
+  } catch (error) {
 
-        console.log("========== CLUBKONNECT ERROR ==========");
-        console.log("Status:", error.response?.status);
-        console.log("Data:", error.response?.data);
-        console.log("Message:", error.message);
+    console.log("========== CLUBKONNECT ERROR ==========");
+    console.log("Status:", error.response?.status);
+    console.log("Headers:", error.response?.headers);
+    console.log("Body:", error.response?.data);
+    console.log("Message:", error.message);
 
-        throw error;
-    }
+    throw error;
+  }
 };
 
 module.exports = {
-    getWalletBalance,
+  getWalletBalance,
 };
