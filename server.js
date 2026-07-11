@@ -8,6 +8,17 @@ const rateLimit = require("express-rate-limit");
 require("./config/firebase");
 const pool = require("./config/database");
 
+// Middleware
+const notFound = require("./middleware/notFound");
+const errorHandler = require("./middleware/errorHandler");
+
+// Routes
+const statusRoute = require("./routes/status");
+const dataRoutes = require("./routes/dataRoutes");
+const authRoutes = require("./routes/authRoutes");
+const walletRoutes = require("./routes/walletRoutes");
+const airtimeRoutes = require("./routes/airtimeRoutes");
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -15,10 +26,8 @@ const PORT = process.env.PORT || 3000;
 // Security Middleware
 // ==========================
 
-// Secure HTTP headers
 app.use(helmet());
 
-// Allow only your frontend
 app.use(cors({
     origin: [
         "http://localhost:3000",
@@ -28,9 +37,8 @@ app.use(cors({
     credentials: true,
 }));
 
-// Prevent abuse
 const limiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
+    windowMs: 15 * 60 * 1000,
     max: 100,
     message: {
         success: false,
@@ -40,22 +48,17 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-// Parse JSON
 app.use(express.json());
 
 // ==========================
 // Routes
 // ==========================
 
-const statusRoute = require("./routes/status");
-const dataRoutes = require("./routes/dataRoutes");
-const authRoutes = require("./routes/authRoutes");
-const walletRoutes = require("./routes/walletRoutes"); // ✅ NEW
-
 app.use("/status", statusRoute);
 app.use("/api", dataRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/wallet", walletRoutes); // ✅ NEW
+app.use("/api/wallet", walletRoutes);
+app.use("/api/airtime", airtimeRoutes);
 
 // ==========================
 // Home Route
@@ -65,9 +68,21 @@ app.get("/", (req, res) => {
     res.json({
         success: true,
         message: "Welcome to QuickTop API 🚀",
-        version: "1.0.0"
+        version: "2.0.0"
     });
 });
+
+// ==========================
+// 404 Handler
+// ==========================
+
+app.use(notFound);
+
+// ==========================
+// Global Error Handler
+// ==========================
+
+app.use(errorHandler);
 
 // ==========================
 // Database Connection
@@ -90,4 +105,5 @@ pool.query("SELECT NOW()")
         console.error(err);
 
         process.exit(1);
+
     });
