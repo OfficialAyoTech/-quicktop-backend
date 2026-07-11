@@ -1,3 +1,22 @@
+# Dependencies
 node_modules/
+
+# Environment variables
 .env
-config/firebase-service-account.json.json
+.env.*
+
+# Firebase Admin Service Account
+config/firebase-service-account.json
+config/*.json
+
+# Logs
+*.log
+logs/
+
+# OS Files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
