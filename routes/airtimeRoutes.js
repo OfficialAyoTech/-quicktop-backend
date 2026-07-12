@@ -8,7 +8,7 @@ const validateAirtimeRequest = require("../validators/airtimeValidator");
 // POST /api/airtime/purchase
 router.post(
     "/purchase",
-    devAuth,
+    verifyFirebaseToken,
     validateAirtimeRequest,
     purchaseAirtime
 );
