@@ -20,7 +20,11 @@ const getWalletBalance = async () => {
 
     console.log("==================================");
     console.log("Checking Wallet Balance...");
-    console.log("Calling URL:", url);
+   console.log("BASE_URL VALUE:");
+console.log(JSON.stringify(BASE_URL));
+
+console.log("FINAL URL:");
+console.log(JSON.stringify(url));
 
    console.log("==================================");
 console.log("FINAL URL:");
@@ -68,7 +72,11 @@ const buyAirtime = async ({
 
     console.log("==================================");
     console.log("Buying Airtime...");
-    console.log("Calling URL:", url);
+    console.log("BASE_URL VALUE:");
+console.log(JSON.stringify(BASE_URL));
+
+console.log("FINAL URL:");
+console.log(JSON.stringify(url));
 
     const response = await httpClient.get(url);
 
