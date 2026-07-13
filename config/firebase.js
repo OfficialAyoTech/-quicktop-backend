@@ -7,8 +7,8 @@ const serviceAccount = {
   privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
 };
 
-const app = initializeApp({
+initializeApp({
   credential: cert(serviceAccount),
 });
 
-module.exports = getAuth(app);
+module.exports = getAuth();
