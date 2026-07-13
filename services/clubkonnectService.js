@@ -4,6 +4,10 @@ const BASE_URL = process.env.CK_BASE;
 const USER_ID = process.env.CK_USER_ID;
 const API_KEY = process.env.CK_API_KEY;
 
+console.log("CK_BASE =", BASE_URL);
+console.log("CK_USER_ID =", USER_ID);
+console.log("API_KEY exists =", !!API_KEY);
+
 /**
  * Get ClubKonnect Wallet Balance
  */
