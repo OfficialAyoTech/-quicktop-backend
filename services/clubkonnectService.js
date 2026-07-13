@@ -22,7 +22,12 @@ const getWalletBalance = async () => {
     console.log("Checking Wallet Balance...");
     console.log("Calling URL:", url);
 
-    const response = await httpClient.get(url);
+   console.log("==================================");
+console.log("FINAL URL:");
+console.log(url);
+console.log("==================================");
+
+const response = await httpClient.get(url);
 
     console.log("Wallet Response:");
     console.log(response.data);
