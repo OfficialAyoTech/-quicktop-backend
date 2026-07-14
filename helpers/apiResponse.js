@@ -1,20 +1,24 @@
 class ApiResponse {
 
-    static success(res, message, data = {}, statusCode = 200) {
+    static success(res, message, data = null, reference = null, status = 200) {
 
-        return res.status(statusCode).json({
+        return res.status(status).json({
             success: true,
             message,
-            data
+            reference,
+            data,
+            errors: null
         });
 
     }
 
-    static error(res, message, statusCode = 500, errors = null) {
+    static error(res, message, status = 400, errors = null, reference = null) {
 
-        return res.status(statusCode).json({
+        return res.status(status).json({
             success: false,
             message,
+            reference,
+            data: null,
             errors
         });
 
