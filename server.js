@@ -1,5 +1,9 @@
 require("dotenv").config();
 
+const validateEnv = require("./config/validateEnv");
+
+validateEnv();
+
 const express = require("express");
 const helmet = require("helmet");
 const cors = require("cors");
@@ -20,7 +24,11 @@ const statusRoute = require("./routes/status");
 const dataRoutes = require("./routes/dataRoutes");
 const authRoutes = require("./routes/authRoutes");
 const walletRoutes = require("./routes/walletRoutes");
+const walletLedgerRoutes = require("./routes/walletLedgerRoutes");
 const airtimeRoutes = require("./routes/airtimeRoutes");
+const transactionRoutes = require("./routes/transactionRoutes");
+const paymentRoutes = require("./routes/paymentRoutes");
+const transferRoutes = require("./routes/transferRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -34,6 +42,8 @@ app.use(helmet());
 app.use(cors({
     origin: [
         "http://localhost:3000",
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
         "https://officialayotech.github.io"
     ],
     credentials: true
@@ -65,9 +75,11 @@ app.use("/api", dataRoutes);
 app.use("/api/auth", authRoutes);
 
 app.use("/api/wallet", walletRoutes);
-
+app.use("/api/wallet-ledger", walletLedgerRoutes);
 app.use("/api/airtime", airtimeRoutes);
-
+app.use("/api/transactions", transactionRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/transfers", transferRoutes);
 // ===================================
 // Home
 // ===================================

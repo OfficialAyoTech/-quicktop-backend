@@ -1,19 +1,13 @@
 const express = require("express");
 const router = express.Router();
 
-const WalletController = require("../controllers/walletController");
 const authenticateUser = require("../middleware/auth");
+const WalletLedgerController = require("../controllers/walletLedgerController");
 
 router.get(
     "/",
     authenticateUser,
-    WalletController.getWallet
-);
-
-router.get(
-    "/balance",
-    authenticateUser,
-    WalletController.getBalance
+    WalletLedgerController.getHistory
 );
 
 module.exports = router;

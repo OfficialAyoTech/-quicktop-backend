@@ -1,27 +1,50 @@
-const {
-    getWalletBalance,
-} = require("../services/clubkonnectService");
+const WalletService = require("../services/walletService");
+const ApiResponse = require("../helpers/apiResponse");
 
-const walletBalance = async (req, res) => {
-    try {
+class WalletController {
 
-        const balance = await getWalletBalance();
+    /**
+     * Get user wallet
+     */
+    static async getWallet(req, res, next) {
 
-        return res.json({
-            success: true,
-            provider: "ClubKonnect",
-            data: balance,
-        });
+        try {
 
-    } catch (error) {
+            const wallet = await WalletService.getWallet(req.user.id);
 
-        return res.status(500).json({
-            success: false,
-            message: error.message,
-        });
+            return ApiResponse.success(
+                res,
+                "Wallet retrieved successfully.",
+                wallet
+            );
+
+        } catch (error) {
+            next(error);
+        }
+
     }
-};
 
-module.exports = {
-    walletBalance,
-};
+    /**
+     * Get wallet balance
+     */
+    static async getBalance(req, res, next) {
+
+        try {
+
+            const balance = await WalletService.getBalance(req.user.id);
+
+            return ApiResponse.success(
+                res,
+                "Wallet balance retrieved successfully.",
+                balance
+            );
+
+        } catch (error) {
+            next(error);
+        }
+
+    }
+
+}
+
+module.exports = WalletController;

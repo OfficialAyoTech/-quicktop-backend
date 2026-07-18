@@ -1,19 +1,19 @@
 const express = require("express");
 const router = express.Router();
 
-const WalletController = require("../controllers/walletController");
+const TransactionController = require("../controllers/transactionController");
 const authenticateUser = require("../middleware/auth");
 
 router.get(
     "/",
     authenticateUser,
-    WalletController.getWallet
+    TransactionController.getTransactions
 );
 
 router.get(
-    "/balance",
+    "/:reference",
     authenticateUser,
-    WalletController.getBalance
+    TransactionController.getTransaction
 );
 
 module.exports = router;

@@ -3,48 +3,74 @@ const {
     buyAirtime,
     buyData,
 } = require("./clubkonnectService");
+const WalletService = require("./walletService");
 const ProviderResponse = require("../helpers/providerResponse");
 const generateReference = require("../utils/referenceGenerator");
 const NETWORKS = require("../utils/networkCodes");
+const BadRequestError = require("../errors/BadRequestError");
+const NotFoundError = require("../errors/NotFoundError");
+const ForbiddenError = require("../errors/ForbiddenError");
+const DatabaseTransaction = require("../helpers/databaseTransaction");
 
 class TransactionService {
 
     /**
-     * Purchase Airtime
-     */
-    static async purchaseAirtime(userId, payload) {
+ * Purchase Airtime
+ */
+static async purchaseAirtime(userId, payload) {
 
-        const {
-            network,
-            phone,
-            amount
-        } = payload;
+    const {
+        network,
+        phone,
+        amount
+    } = payload;
 
-        const networkCode = NETWORKS[network.toUpperCase()];
+    const networkCode = NETWORKS[network.toUpperCase()];
 
-        if (!networkCode) {
-            throw new Error("Invalid network.");
-        }
+    if (!networkCode) {
+        throw new BadRequestError("Invalid network.");
+    }
 
-        // Generate unique reference
-        const reference = generateReference();
+    const reference = generateReference();
 
-        // Create transaction
-        await TransactionModel.create({
-            user_id: userId,
-            reference,
-            provider: "ClubKonnect",
-            service: "Airtime",
-            phone,
-            amount,
-            status: "PENDING",
-            api_response: {}
-        });
+    let walletDebited = false;
 
-        try {
+    await DatabaseTransaction.run(async (client) => {
 
-            // Call ClubKonnect
-            const response = await buyAirtime({
+        await WalletService.debitWithClient(
+            userId,
+            {
+                amount,
+                source: "WALLET",
+                service: "AIRTIME",
+                reference,
+                description: `Airtime purchase for ${phone}`
+            },
+            client
+        );
+
+        walletDebited = true;
+
+        await TransactionModel.create(
+            {
+                user_id: userId,
+                reference,
+                provider: "ClubKonnect",
+                service: "Airtime",
+                phone,
+                amount,
+                status: "PENDING",
+                api_response: {}
+            },
+            client
+        );
+
+    });
+
+    try {
+
+    
+             const response = await buyAirtime({
                 network: networkCode,
                 amount,
                 phone,
@@ -56,27 +82,51 @@ class TransactionService {
                     ? "SUCCESS"
                     : "FAILED";
 
+            if (transactionStatus === "FAILED") {
+
+                await WalletService.credit(userId, {
+                    amount,
+                    source: "REFUND",
+                    service: "AIRTIME",
+                    reference: `${reference}-REFUND`,
+                    description: "Refund for failed airtime purchase"
+                });
+
+            }
+
             await TransactionModel.updateStatus(
                 reference,
                 transactionStatus,
                 response
             );
 
-           return {
-    success: transactionStatus === "SUCCESS",
-    reference,
-    response: ProviderResponse.airtime(
-        {
-            network,
-            phone,
-            amount
-        },
-        response,
-        reference
-    )
-};
+            return {
+                success: transactionStatus === "SUCCESS",
+                reference,
+                response: ProviderResponse.airtime(
+                    {
+                        network,
+                        phone,
+                        amount
+                    },
+                    response,
+                    reference
+                )
+            };
 
         } catch (error) {
+
+            if (walletDebited) {
+
+                await WalletService.credit(userId, {
+                    amount,
+                    source: "REFUND",
+                    service: "AIRTIME",
+                    reference: `${reference}-REFUND`,
+                    description: "Refund for failed airtime purchase"
+                });
+
+            }
 
             await TransactionModel.updateStatus(
                 reference,
@@ -91,7 +141,7 @@ class TransactionService {
         }
 
     }
-/**
+        /**
  * Purchase Data
  */
 static async purchaseData(userId, payload) {
@@ -100,32 +150,53 @@ static async purchaseData(userId, payload) {
         network,
         phone,
         plan,
+        amount
     } = payload;
 
     const networkCode = NETWORKS[network.toUpperCase()];
 
     if (!networkCode) {
-        throw new Error("Invalid network.");
+        throw new BadRequestError("Invalid network.");
     }
 
-    // Generate unique reference
     const reference = generateReference();
 
-    // Save pending transaction
-    await TransactionModel.create({
-        user_id: userId,
-        reference,
-        provider: "ClubKonnect",
-        service: "Data",
-        phone,
-        amount: 0,
-        status: "PENDING",
-        api_response: {}
+    let walletDebited = false;
+
+    await DatabaseTransaction.run(async (client) => {
+
+        await WalletService.debitWithClient(
+            userId,
+            {
+                amount,
+                source: "WALLET",
+                service: "DATA",
+                reference,
+                description: `Data purchase for ${phone}`
+            },
+            client
+        );
+
+        walletDebited = true;
+
+        await TransactionModel.create(
+            {
+                user_id: userId,
+                reference,
+                provider: "ClubKonnect",
+                service: "Data",
+                phone,
+                amount,
+                status: "PENDING",
+                api_response: {}
+            },
+            client
+        );
+
     });
 
     try {
 
-        // Call ClubKonnect
         const response = await buyData({
             network: networkCode,
             plan,
@@ -138,6 +209,18 @@ static async purchaseData(userId, payload) {
                 ? "SUCCESS"
                 : "FAILED";
 
+        if (transactionStatus === "FAILED") {
+
+            await WalletService.credit(userId, {
+                amount,
+                source: "REFUND",
+                service: "DATA",
+                reference: `${reference}-REFUND`,
+                description: "Refund for failed data purchase"
+            });
+
+        }
+
         await TransactionModel.updateStatus(
             reference,
             transactionStatus,
@@ -145,20 +228,32 @@ static async purchaseData(userId, payload) {
         );
 
         return {
-    success: transactionStatus === "SUCCESS",
-    reference,
-    response: ProviderResponse.data(
-        {
-            network,
-            phone,
-            plan
-        },
-        response,
-        reference
-    )
-};
+            success: transactionStatus === "SUCCESS",
+            reference,
+            response: ProviderResponse.data(
+                {
+                    network,
+                    phone,
+                    plan
+                },
+                response,
+                reference
+            )
+        };
 
     } catch (error) {
+
+        if (walletDebited) {
+
+            await WalletService.credit(userId, {
+                amount,
+                source: "REFUND",
+                service: "DATA",
+                reference: `${reference}-REFUND`,
+                description: "Refund for failed data purchase"
+            });
+
+        }
 
         await TransactionModel.updateStatus(
             reference,
@@ -173,6 +268,70 @@ static async purchaseData(userId, payload) {
     }
 
 }
+    /**
+ * Record Wallet Funding Transaction
+ */
+static async recordWalletFunding(
+    userId,
+    payload,
+    client = null
+) {
+
+    return await TransactionModel.create(
+        {
+            user_id: userId,
+            reference: payload.reference,
+            provider: "Paystack",
+            service: "Wallet Funding",
+            phone: null,
+            amount: payload.amount,
+            status: "SUCCESS",
+            api_response: payload.api_response || {}
+        },
+        client
+    );
+
+}
+        /**
+     * Get all transactions
+     */
+    static async getTransactions(userId, query = {}) {
+
+        const page = Number(query.page) || 1;
+        const limit = Number(query.limit) || 20;
+        const offset = (page - 1) * limit;
+
+        return await TransactionModel.getTransactions(userId, {
+            service: query.service,
+            status: query.status,
+            limit,
+            offset
+        });
+
+    }
+
+    /**
+     * Get transaction by reference
+     */
+    static async getTransaction(userId, reference) {
+
+        const transaction =
+            await TransactionModel.findByReference(reference);
+
+        if (!transaction) {
+            throw new NotFoundError("Transaction not found.");
+        }
+
+        if (transaction.user_id !== userId) {
+           throw new ForbiddenError(
+    "Unauthorized access to transaction."
+);
+        }
+
+        return transaction;
+
+    }
+
 }
 
 module.exports = TransactionService;
