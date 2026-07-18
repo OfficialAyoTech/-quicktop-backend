@@ -1,40 +1,14 @@
-const requiredEnv = [
-    "DATABASE_URL",
+const admin = require("firebase-admin");
 
-    "FIREBASE_SERVICE_ACCOUNT",
+const serviceAccount = JSON.parse(
+    process.env.FIREBASE_SERVICE_ACCOUNT
+);
 
-    "PAYSTACK_SECRET_KEY",
-    "PAYSTACK_BASE_URL",
+serviceAccount.private_key =
+    serviceAccount.private_key.replace(/\\n/g, "\n");
 
-    "CK_USER_ID",
-    "CK_API_KEY",
-    "CK_BASE"
-];
+admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+});
 
-function validateEnv() {
-
-    const missing = requiredEnv.filter(
-        (key) => !process.env[key]
-    );
-
-    if (missing.length > 0) {
-
-        console.error("");
-        console.error("❌ Missing required environment variables:");
-        console.error("");
-
-        missing.forEach((env) => {
-            console.error(`   - ${env}`);
-        });
-
-        console.error("");
-
-        process.exit(1);
-
-    }
-
-    console.log("✅ Environment variables validated.");
-
-}
-
-module.exports = validateEnv;
+module.exports = admin.auth();
