@@ -8,7 +8,7 @@ class TransactionController {
      */
     static getTransactions = asyncHandler(async (req, res) => {
 
-        const userId = req.user.uid;
+        const userId = req.user.id;
 
         const transactions =
             await TransactionService.getTransactions(
@@ -31,7 +31,7 @@ class TransactionController {
      */
     static getTransaction = asyncHandler(async (req, res) => {
 
-        const userId = req.user.uid;
+        const userId = req.user.id;
 
         const transaction =
             await TransactionService.getTransaction(
