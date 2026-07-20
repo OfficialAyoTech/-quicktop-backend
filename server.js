@@ -1,6 +1,8 @@
 require("dotenv").config();
 
 const validateEnv = require("./config/validateEnv");
+const swaggerUi = require("swagger-ui-express");
+const swaggerSpec = require("./config/swagger");
 
 validateEnv();
 
@@ -32,6 +34,13 @@ const transferRoutes = require("./routes/transferRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Swagger Documentation
+app.use(
+    "/api-docs",
+    swaggerUi.serve,
+    swaggerUi.setup(swaggerSpec)
+);
 
 // ===================================
 // Security Middleware

@@ -75,6 +75,7 @@ class PaymentService {
         {
             reference,
             amount,
+            balance_after: updatedWallet.balance,
             api_response: payment
         },
         client

@@ -15,7 +15,7 @@ const purchaseAirtime = async (req, res) => {
 
         // Purchase airtime
         const result = await TransactionService.purchaseAirtime(
-            req.user.uid,
+            req.user.id,
             {
                 network,
                 phone,

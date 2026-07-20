@@ -37,35 +37,37 @@ static async purchaseAirtime(userId, payload) {
 
     await DatabaseTransaction.run(async (client) => {
 
-        await WalletService.debitWithClient(
-            userId,
-            {
-                amount,
-                source: "WALLET",
-                service: "AIRTIME",
-                reference,
-                description: `Airtime purchase for ${phone}`
-            },
-            client
-        );
+    const updatedWallet = await WalletService.debitWithClient(
+        userId,
+        {
+            amount,
+            source: "WALLET",
+            service: "AIRTIME",
+            reference,
+            description: `Airtime purchase for ${phone}`
+        },
+        client
+    );
 
-        walletDebited = true;
+    walletDebited = true;
 
-        await TransactionModel.create(
-            {
-                user_id: userId,
-                reference,
-                provider: "ClubKonnect",
-                service: "Airtime",
-                phone,
-                amount,
-                status: "PENDING",
-                api_response: {}
-            },
-            client
-        );
+    await TransactionModel.create(
+        {
+            user_id: userId,
+            reference,
+            provider: "ClubKonnect",
+            service: "Airtime",
+            phone,
+            amount,
+            status: "PENDING",
+            network,
+            balance_after: updatedWallet.balance,
+            api_response: {}
+        },
+        client
+    );
 
-    });
+});
 
     try {
 
@@ -163,37 +165,35 @@ static async purchaseData(userId, payload) {
 
     let walletDebited = false;
 
-    await DatabaseTransaction.run(async (client) => {
+    await WalletService.debitWithClient(
+    userId,
+    {
+        amount,
+        source: "WALLET",
+        service: "DATA",
+        reference,
+        description: `Data purchase for ${phone}`
+    },
+    client
+);
 
-        await WalletService.debitWithClient(
-            userId,
-            {
-                amount,
-                source: "WALLET",
-                service: "DATA",
-                reference,
-                description: `Data purchase for ${phone}`
-            },
-            client
-        );
+walletDebited = true;
 
-        walletDebited = true;
-
-        await TransactionModel.create(
-            {
-                user_id: userId,
-                reference,
-                provider: "ClubKonnect",
-                service: "Data",
-                phone,
-                amount,
-                status: "PENDING",
-                api_response: {}
-            },
-            client
-        );
-
-    });
+await TransactionModel.create(
+{
+    user_id: userId,
+    reference,
+    provider: "ClubKonnect",
+    service: "Data",
+    phone,
+    amount,
+    status: "PENDING",
+    network,
+    balance_after: updatedWallet.balance,
+    api_response: {}
+},
+client
+);
 
     try {
 
@@ -286,6 +286,7 @@ static async recordWalletFunding(
             phone: null,
             amount: payload.amount,
             status: "SUCCESS",
+            balance_after: payload.balance_after,
             api_response: payload.api_response || {}
         },
         client
