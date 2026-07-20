@@ -15,7 +15,7 @@ const buyData = async (req, res) => {
         }
 
         const result = await TransactionService.purchaseData(
-            req.user.uid,
+            req.user.id,
             {
                 network,
                 phone,

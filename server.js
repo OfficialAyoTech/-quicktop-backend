@@ -33,6 +33,10 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const transferRoutes = require("./routes/transferRoutes");
 
 const app = express();
+
+// Trust Render's proxy
+app.set("trust proxy", 1);
+
 const PORT = process.env.PORT || 3000;
 
 // Swagger Documentation

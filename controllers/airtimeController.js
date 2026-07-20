@@ -5,6 +5,9 @@ const purchaseAirtime = async (req, res) => {
 
         const { network, phone, amount } = req.body;
 
+        console.log("===== AUTH USER =====");
+        console.log(req.user);
+
         // Validate request
         if (!network || !phone || !amount) {
             return res.status(400).json({

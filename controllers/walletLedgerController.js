@@ -12,7 +12,7 @@ class WalletLedgerController {
         try {
 
             // Get user's wallet
-            const wallet = await WalletService.getWallet(req.user.uid);
+            const wallet = await WalletService.getWallet(req.user.id);
 
             // Get ledger records
             const history = await WalletLedgerService.getHistory(wallet.id);
