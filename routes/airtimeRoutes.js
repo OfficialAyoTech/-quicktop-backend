@@ -2,13 +2,13 @@ const express = require("express");
 const router = express.Router();
 
 const { purchaseAirtime } = require("../controllers/airtimeController");
-const verifyFirebaseToken = require("../middleware/devAuth");
+const authenticateUser = require("../middleware/auth");
 const validateAirtimeRequest = require("../validators/airtimeValidator");
 
 // POST /api/airtime/purchase
 router.post(
     "/purchase",
-    verifyFirebaseToken,
+    authenticateUser,
     validateAirtimeRequest,
     purchaseAirtime
 );
