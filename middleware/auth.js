@@ -19,17 +19,24 @@ const authenticateUser = async (req, res, next) => {
         // Verify Firebase token
         const decodedToken = await auth.verifyIdToken(idToken);
 
-        // Check if user exists in PostgreSQL
-        const dbUser = await UserModel.findByFirebaseUid(decodedToken.uid);
+console.log("========== FIREBASE TOKEN ==========");
+console.log(decodedToken);
 
-        // Attach Firebase user
-        req.user = {
-            uid: decodedToken.uid,
-            email: decodedToken.email,
-            name: decodedToken.name || decodedToken.email,
-            id: dbUser ? dbUser.id : null,
-            full_name: dbUser ? dbUser.full_name : null
-        };
+const dbUser = await UserModel.findByFirebaseUid(decodedToken.uid);
+
+console.log("========== POSTGRES USER ==========");
+console.log(dbUser);
+
+req.user = {
+    uid: decodedToken.uid,
+    email: decodedToken.email,
+    name: decodedToken.name || decodedToken.email,
+    id: dbUser ? dbUser.id : null,
+    full_name: dbUser ? dbUser.full_name : null
+};
+
+console.log("========== REQ.USER ==========");
+console.log(req.user);
 
         next();
 
