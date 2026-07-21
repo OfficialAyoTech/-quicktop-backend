@@ -37,12 +37,6 @@ static async purchaseAirtime(userId, payload) {
 
     await DatabaseTransaction.run(async (client) => {
 
-        console.log("===== PAYLOAD BEFORE DEBIT =====");
-console.log(payload);
-
-console.log("Amount:", amount);
-console.log("Type of amount:", typeof amount);
-
     const updatedWallet = await WalletService.debitWithClient(
         userId,
         {

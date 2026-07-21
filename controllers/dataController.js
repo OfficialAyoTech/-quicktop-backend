@@ -8,7 +8,7 @@ const buyData = async (req, res) => {
 console.log(req.body);
 console.log(req.user);
 
-        const { network, phone, plan } = req.body;
+        const { network, phone, plan, amount } = req.body;
 
         if (!network || !phone || !plan) {
             return ApiResponse.error(
@@ -19,13 +19,14 @@ console.log(req.user);
 
         console.log("Calling TransactionService.purchaseData...");
         const result = await TransactionService.purchaseData(
-            req.user.id,
-            {
-                network,
-                phone,
-                plan
-            }
-        );
+    req.user.id,
+    {
+        network,
+        phone,
+        plan,
+        amount
+    }
+);
 
         let message = "Data purchase successful.";
 
