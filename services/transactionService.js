@@ -148,9 +148,6 @@ static async purchaseAirtime(userId, payload) {
  */
 static async purchaseData(userId, payload) {
 
-    console.log("===== PURCHASE DATA SERVICE =====");
-    console.log(payload);
-
     const {
         network,
         phone,
@@ -166,12 +163,9 @@ static async purchaseData(userId, payload) {
 
     const reference = generateReference();
 
-    let walletDebited = false;
+    return await DatabaseTransaction.run(async (client) => {
 
-    console.log("Starting database transaction...");
-    await DatabaseTransaction.run(async (client) => {
-
-        console.log("Debiting wallet...");
+        // Debit wallet
         const updatedWallet = await WalletService.debitWithClient(
             userId,
             {
@@ -184,99 +178,102 @@ static async purchaseData(userId, payload) {
             client
         );
 
-        walletDebited = true;
-        console.log("Wallet debited successfully");
-
-        console.log("Transaction saved");
-
-await TransactionModel.create(
-    {
-        user_id: userId,
-        reference,
-        provider: "ClubKonnect",
-        service: "Data",
-        phone,
-        amount,
-        status: "PENDING",
-        network,
-        balance_after: updatedWallet.balance,
-        api_response: {}
-    },
-    client
-);
-
-    try {
-
-        console.log("Calling ClubKonnect...");
-        const response = await buyData({
-            network: networkCode,
-            plan,
-            phone,
-            requestId: reference
-        });
-
-        const transactionStatus =
-            response.statuscode === "100"
-                ? "SUCCESS"
-                : "FAILED";
-
-        if (transactionStatus === "FAILED") {
-
-            await WalletService.credit(userId, {
-                amount,
-                source: "REFUND",
-                service: "DATA",
-                reference: `${reference}-REFUND`,
-                description: "Refund for failed data purchase"
-            });
-
-        }
-
-        await TransactionModel.updateStatus(
-            reference,
-            transactionStatus,
-            response
-        );
-
-        return {
-            success: transactionStatus === "SUCCESS",
-            reference,
-            response: ProviderResponse.data(
-                {
-                    network,
-                    phone,
-                    plan
-                },
-                response,
-                reference
-            )
-        };
-
-    } catch (error) {
-
-        if (walletDebited) {
-
-            await WalletService.credit(userId, {
-                amount,
-                source: "REFUND",
-                service: "DATA",
-                reference: `${reference}-REFUND`,
-                description: "Refund for failed data purchase"
-            });
-
-        }
-
-        await TransactionModel.updateStatus(
-            reference,
-            "FAILED",
+        // Save pending transaction
+        await TransactionModel.create(
             {
-                error: error.response?.data || error.message
-            }
+                user_id: userId,
+                reference,
+                provider: "ClubKonnect",
+                service: "Data",
+                phone,
+                amount,
+                status: "PENDING",
+                network,
+                balance_after: updatedWallet.balance,
+                api_response: {}
+            },
+            client
         );
 
-        throw error;
+        try {
 
-    }
+            const response = await buyData({
+                network: networkCode,
+                plan,
+                phone,
+                requestId: reference
+            });
+
+            const transactionStatus =
+                response.statuscode === "100"
+                    ? "SUCCESS"
+                    : "FAILED";
+
+            if (transactionStatus === "FAILED") {
+
+                await WalletService.creditWithClient(
+                    userId,
+                    {
+                        amount,
+                        source: "REFUND",
+                        service: "DATA",
+                        reference: `${reference}-REFUND`,
+                        description: "Refund for failed data purchase"
+                    },
+                    client
+                );
+
+            }
+
+            await TransactionModel.updateStatus(
+                reference,
+                transactionStatus,
+                response,
+                client
+            );
+
+            return {
+                success: transactionStatus === "SUCCESS",
+                reference,
+                response: ProviderResponse.data(
+                    {
+                        network,
+                        phone,
+                        plan
+                    },
+                    response,
+                    reference
+                )
+            };
+
+        } catch (error) {
+
+            await WalletService.creditWithClient(
+                userId,
+                {
+                    amount,
+                    source: "REFUND",
+                    service: "DATA",
+                    reference: `${reference}-REFUND`,
+                    description: "Refund for failed data purchase"
+                },
+                client
+            );
+
+            await TransactionModel.updateStatus(
+                reference,
+                "FAILED",
+                {
+                    error: error.response?.data || error.message
+                },
+                client
+            );
+
+            throw error;
+
+        }
+
+    });
 
 }
     /**
