@@ -97,14 +97,14 @@ const buyData = async ({
     try {
 
         const url =
-            `${BASE_URL}/APIDataV1.asp` +
-            `?UserID=${USER_ID}` +
-            `&APIKey=${API_KEY}` +
-            `&MobileNetwork=${network}` +
-            `&DataPlan=${plan}` +
-            `&MobileNumber=${phone}` +
-            `&RequestID=${requestId}` +
-            `&CallBackURL=${encodeURIComponent(callbackUrl)}`;
+    `${BASE_URL}/APIDatabundleV1.asp` +
+    `?UserID=${USER_ID}` +
+    `&APIKey=${API_KEY}` +
+    `&MobileNetwork=${network}` +
+    `&DataPlan=${plan}` +
+    `&MobileNumber=${phone}` +
+    `&RequestID=${requestId}` +
+    `&CallBackURL=${encodeURIComponent(callbackUrl)}`;
 
         console.log("==================================");
         console.log("Buying Data...");
