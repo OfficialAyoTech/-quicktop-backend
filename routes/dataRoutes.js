@@ -1,4 +1,5 @@
 const express = require("express");
+console.log("✅ dataRoutes loaded");
 
 const router = express.Router();
 
@@ -10,6 +11,13 @@ const { buyDataSchema } = require("../validators/dataValidator");
 const {
     buyData,
 } = require("../controllers/dataController");
+
+router.get("/test", (req, res) => {
+    res.json({
+        success: true,
+        message: "Data route works!"
+    });
+});
 
 router.post(
     "/buy-data",

@@ -83,7 +83,7 @@ app.use(limiter);
 
 app.use("/status", statusRoute);
 
-app.use("/api", dataRoutes);
+app.use("/api/data", dataRoutes);
 
 app.use("/api/auth", authRoutes);
 
