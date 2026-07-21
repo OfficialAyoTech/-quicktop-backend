@@ -4,6 +4,9 @@ const ApiResponse = require("../helpers/apiResponse");
 const buyData = async (req, res) => {
 
     try {
+        console.log("===== DATA REQUEST =====");
+console.log(req.body);
+console.log(req.user);
 
         const { network, phone, plan } = req.body;
 
@@ -14,6 +17,7 @@ const buyData = async (req, res) => {
             );
         }
 
+        console.log("Calling TransactionService.purchaseData...");
         const result = await TransactionService.purchaseData(
             req.user.id,
             {

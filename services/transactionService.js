@@ -148,6 +148,9 @@ static async purchaseAirtime(userId, payload) {
  */
 static async purchaseData(userId, payload) {
 
+    console.log("===== PURCHASE DATA SERVICE =====");
+    console.log(payload);
+
     const {
         network,
         phone,
@@ -165,8 +168,10 @@ static async purchaseData(userId, payload) {
 
     let walletDebited = false;
 
+    console.log("Starting database transaction...");
     await DatabaseTransaction.run(async (client) => {
 
+        console.log("Debiting wallet...");
         const updatedWallet = await WalletService.debitWithClient(
             userId,
             {
@@ -180,27 +185,29 @@ static async purchaseData(userId, payload) {
         );
 
         walletDebited = true;
+        console.log("Wallet debited successfully");
 
-        await TransactionModel.create(
-            {
-                user_id: userId,
-                reference,
-                provider: "ClubKonnect",
-                service: "Data",
-                phone,
-                amount,
-                status: "PENDING",
-                network,
-                balance_after: updatedWallet.balance,
-                api_response: {}
-            },
-            client
-        );
+        console.log("Transaction saved");
 
-    });
+await TransactionModel.create(
+    {
+        user_id: userId,
+        reference,
+        provider: "ClubKonnect",
+        service: "Data",
+        phone,
+        amount,
+        status: "PENDING",
+        network,
+        balance_after: updatedWallet.balance,
+        api_response: {}
+    },
+    client
+);
 
     try {
 
+        console.log("Calling ClubKonnect...");
         const response = await buyData({
             network: networkCode,
             plan,
