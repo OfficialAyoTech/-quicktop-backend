@@ -4,7 +4,7 @@ const {
     buyData,
     getWalletBalance,
     queryTransaction
-} = require("./clubKonnectService");
+} = require("./clubkonnectService");
 const WalletService = require("./walletService");
 const ProviderResponse = require("../helpers/providerResponse");
 const generateReference = require("../utils/referenceGenerator");
