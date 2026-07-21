@@ -128,9 +128,44 @@ const buyData = async ({
     }
 
 };
+/**
+ * Query Transaction
+ */
+const queryTransaction = async ({ requestId }) => {
+
+    try {
+
+        const url =
+            `${BASE_URL}/APIQueryV1.asp` +
+            `?UserID=${USER_ID}` +
+            `&APIKey=${API_KEY}` +
+            `&RequestID=${requestId}`;
+
+        console.log("==================================");
+        console.log("Querying Transaction...");
+        console.log(url);
+
+        const response = await httpClient.get(url);
+
+        console.log("Query Response:");
+        console.log(response.data);
+
+        return response.data;
+
+    } catch (error) {
+
+        console.log("========== QUERY ERROR ==========");
+        console.log(error.response?.data || error.message);
+
+        throw error;
+
+    }
+
+};
 
 module.exports = {
     getWalletBalance,
     buyAirtime,
     buyData,
+    queryTransaction,
 };

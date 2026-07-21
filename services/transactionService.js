@@ -2,7 +2,9 @@ const TransactionModel = require("../models/transactionModel");
 const {
     buyAirtime,
     buyData,
-} = require("./clubkonnectService");
+    getWalletBalance,
+    queryTransaction
+} = require("./clubKonnectService");
 const WalletService = require("./walletService");
 const ProviderResponse = require("../helpers/providerResponse");
 const generateReference = require("../utils/referenceGenerator");
@@ -204,10 +206,21 @@ static async purchaseData(userId, payload) {
                 requestId: reference
             });
 
+            // Wait 3 seconds before querying
+await new Promise(resolve => setTimeout(resolve, 3000));
+
+const queryResponse = await queryTransaction({
+    requestId: reference
+});
+
+console.log("========== FINAL QUERY ==========");
+console.log(queryResponse);
+
             const transactionStatus =
-                response.statuscode === "100"
-                    ? "SUCCESS"
-                    : "FAILED";
+    response.status === "ORDER_RECEIVED" ||
+    response.statuscode === "100"
+        ? "SUCCESS"
+        : "FAILED";
 
             if (transactionStatus === "FAILED") {
 
