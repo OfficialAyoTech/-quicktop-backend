@@ -10,6 +10,10 @@ const buyDataSchema = Joi.object({
         .required(),
 
     plan: Joi.string()
+        .required(),
+
+    amount: Joi.number()
+        .positive()
         .required()
 });
 
