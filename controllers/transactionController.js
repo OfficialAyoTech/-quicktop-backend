@@ -1,5 +1,6 @@
 const TransactionService = require("../services/transactionService");
 const asyncHandler = require("../helpers/asyncHandler");
+const ApiResponse = require("../helpers/apiResponse");
 
 class TransactionController {
 
@@ -27,7 +28,7 @@ class TransactionController {
     });
 
     /**
-     * Get a single transaction
+     * Get single transaction from database
      */
     static getTransaction = asyncHandler(async (req, res) => {
 
@@ -46,6 +47,24 @@ class TransactionController {
             data: transaction,
             errors: null
         });
+
+    });
+
+    /**
+     * Query transaction from ClubKonnect
+     */
+    static queryTransaction = asyncHandler(async (req, res) => {
+
+        const { reference } = req.params;
+
+        const result =
+            await TransactionService.queryTransaction(reference);
+
+        return ApiResponse.success(
+            res,
+            "Transaction queried successfully.",
+            result
+        );
 
     });
 

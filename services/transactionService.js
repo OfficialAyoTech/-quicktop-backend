@@ -333,6 +333,39 @@ static async recordWalletFunding(
     }
 
     /**
+ * Query ClubKonnect Transaction
+ */
+static async queryTransaction(reference) {
+
+    const response = await queryTransaction({
+        requestId: reference
+    });
+
+    let status = "PENDING";
+
+    if (
+        response.status &&
+        response.status.toUpperCase().includes("SUCCESS")
+    ) {
+        status = "SUCCESS";
+    } else if (
+        response.status &&
+        response.status.toUpperCase().includes("FAIL")
+    ) {
+        status = "FAILED";
+    }
+
+    await TransactionModel.updateStatus(
+        reference,
+        status,
+        response
+    );
+
+    return response;
+
+}
+
+    /**
      * Get transaction by reference
      */
     static async getTransaction(userId, reference) {
