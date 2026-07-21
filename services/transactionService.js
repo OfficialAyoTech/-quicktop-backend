@@ -323,11 +323,11 @@ static async recordWalletFunding(
             throw new NotFoundError("Transaction not found.");
         }
 
-        if (transaction.user_id !== userId) {
-           throw new ForbiddenError(
-    "Unauthorized access to transaction."
-);
-        }
+        if (String(transaction.user_id) !== String(userId)) {
+   throw new ForbiddenError(
+       "Unauthorized access to transaction."
+   );
+}
 
         return transaction;
 
