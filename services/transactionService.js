@@ -343,17 +343,21 @@ static async queryTransaction(reference) {
 
     let status = "PENDING";
 
-    if (
-        response.status &&
-        response.status.toUpperCase().includes("SUCCESS")
-    ) {
-        status = "SUCCESS";
-    } else if (
-        response.status &&
-        response.status.toUpperCase().includes("FAIL")
-    ) {
-        status = "FAILED";
-    }
+if (
+    response.statuscode === "200" ||
+    response.status === "ORDER_COMPLETED"
+) {
+    status = "SUCCESS";
+} else if (
+    response.status &&
+    (
+        response.status.toUpperCase().includes("FAILED") ||
+        response.status.toUpperCase().includes("REJECT") ||
+        response.status.toUpperCase().includes("CANCEL")
+    )
+) {
+    status = "FAILED";
+}
 
     await TransactionModel.updateStatus(
         reference,
