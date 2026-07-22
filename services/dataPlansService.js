@@ -1,4 +1,4 @@
-const { getDataPlans } = require("./clubKonnectService");
+const { getDataPlans } = require("./clubkonnectService");
 
 class DataPlansService {
 
