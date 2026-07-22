@@ -129,6 +129,38 @@ const buyData = async ({
 
 };
 /**
+ * Get Available Data Plans
+ */
+const getDataPlans = async () => {
+
+    try {
+
+        const url =
+            `${BASE_URL}/APIDatabundlePlansV2.asp` +
+            `?UserID=${USER_ID}`;
+
+        console.log("==================================");
+        console.log("Fetching Data Plans...");
+        console.log(url);
+
+        const response = await httpClient.get(url);
+
+        console.log("Data Plans:");
+        console.log(response.data);
+
+        return response.data;
+
+    } catch (error) {
+
+        console.log("========== DATA PLANS ERROR ==========");
+        console.log(error.response?.data || error.message);
+
+        throw error;
+
+    }
+
+};
+/**
  * Query Transaction
  */
 const queryTransaction = async ({ requestId }) => {
@@ -168,4 +200,5 @@ module.exports = {
     buyAirtime,
     buyData,
     queryTransaction,
+    getDataPlans,
 };

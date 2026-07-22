@@ -30,7 +30,7 @@ const walletLedgerRoutes = require("./routes/walletLedgerRoutes");
 const airtimeRoutes = require("./routes/airtimeRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
-const transferRoutes = require("./routes/transferRoutes");
+const dataPlansRoutes = require("./routes/dataPlansRoutes");
 
 const app = express();
 
@@ -93,6 +93,8 @@ app.use("/api/airtime", airtimeRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/transfers", transferRoutes);
+app.use("/api/data-plans", dataPlansRoutes);
+
 // ===================================
 // Home
 // ===================================
