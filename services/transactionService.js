@@ -267,7 +267,7 @@ if (
     },
     queryResponse,
     reference
-  );
+  )
 };
 
         } catch (error) {
