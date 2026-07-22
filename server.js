@@ -92,7 +92,7 @@ app.use("/api/wallet-ledger", walletLedgerRoutes);
 app.use("/api/airtime", airtimeRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/payments", paymentRoutes);
-app.use("/api/transfers", transferRoutes);
+// app.use("/api/transfers", transferRoutes);
 app.use("/api/data-plans", dataPlansRoutes);
 
 // ===================================
