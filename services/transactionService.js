@@ -206,30 +206,6 @@ static async purchaseData(userId, payload) {
                 requestId: reference
             });
 
-            // If provider accepts the order but hasn't completed it,
-// wait 5 seconds then query the final status.
-if (
-    response.status === "ORDER_RECEIVED" ||
-    response.statuscode === ""
-) {
-
-    console.log("Waiting 5 seconds before querying transaction...");
-
-    await new Promise(resolve =>
-        setTimeout(resolve, 5000)
-    );
-
-    const finalResponse =
-        await queryTransaction(reference);
-
-    console.log("Final Response:");
-    console.log(finalResponse);
-
-    response.status = finalResponse.status;
-    response.statuscode = finalResponse.statuscode;
-    response.remark = finalResponse.remark;
-}
-
             // Wait 3 seconds before querying
 await new Promise(resolve => setTimeout(resolve, 3000));
 
@@ -243,16 +219,12 @@ console.log(queryResponse);
             let transactionStatus = "PENDING";
 
 if (
-    response.statuscode === "200" ||
-    response.status === "ORDER_COMPLETED"
+    queryResponse.statuscode === "200" ||
+    queryResponse.status === "ORDER_COMPLETED"
 ) {
     transactionStatus = "SUCCESS";
 } else if (
-    response.status &&
-    (
-        response.status === "ORDER_RECEIVED" ||
-        response.statuscode === ""
-    )
+    queryResponse.status === "ORDER_RECEIVED"
 ) {
     transactionStatus = "PENDING";
 } else {
@@ -276,11 +248,11 @@ if (
             }
 
             await TransactionModel.updateStatus(
-                reference,
-                transactionStatus,
-                response,
-                client
-            );
+    reference,
+    transactionStatus,
+    queryResponse,
+    client
+);
 
             return {
     success:
@@ -288,14 +260,14 @@ if (
         transactionStatus === "PENDING",
     reference,
     response: ProviderResponse.data(
-        {
-            network,
-            phone,
-            plan
-        },
-        response,
-        reference
-    )
+    {
+        network,
+        phone,
+        plan
+    },
+    queryResponse,
+    reference
+  );
 };
 
         } catch (error) {
