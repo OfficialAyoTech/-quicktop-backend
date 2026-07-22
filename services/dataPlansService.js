@@ -2,23 +2,41 @@ const { getDataPlans } = require("./clubkonnectService");
 
 class DataPlansService {
 
-    /**
-     * Get all data plans
-     */
     static async getPlans(network = null) {
 
-        const plans = await getDataPlans();
+        const response = await getDataPlans();
 
-        // If no network is provided, return everything
-        if (!network) {
-            return plans;
+        const networks = response.MOBILE_NETWORK;
+
+        let plans = [];
+
+        for (const networkName in networks) {
+
+            const products = networks[networkName][0].PRODUCT;
+
+            products.forEach(product => {
+
+                plans.push({
+                    network: networkName.toUpperCase(),
+                    planId: product.PRODUCT_ID,
+                    name: product.PRODUCT_NAME,
+                    amount: Number(product.PRODUCT_AMOUNT),
+                    code: product.PRODUCT_CODE
+                });
+
+            });
+
         }
 
-        // Filter by network (MTN, AIRTEL, GLO, 9MOBILE)
-        return plans.filter(plan =>
-            plan.network &&
-            plan.network.toUpperCase() === network.toUpperCase()
-        );
+        if (network) {
+
+            plans = plans.filter(
+                p => p.network.toUpperCase() === network.toUpperCase()
+            );
+
+        }
+
+        return plans;
 
     }
 
