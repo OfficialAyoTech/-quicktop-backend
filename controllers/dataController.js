@@ -34,7 +34,7 @@ console.log(req.user);
 
     return ApiResponse.error(
         res,
-        "Unable to complete your data purchase. Please try again later.",
+        result.message || "Unable to complete your data purchase.",
         400,
         null,
         result.reference

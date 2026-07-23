@@ -200,13 +200,54 @@ static async purchaseData(userId, payload) {
         try {
 
             const response = await buyData({
-                network: networkCode,
-                plan,
-                phone,
-                requestId: reference
-            });
+    network: networkCode,
+    plan,
+    phone,
+    requestId: reference
+});
 
-            // Wait 3 seconds before querying
+console.log("========== BUY DATA RESPONSE ==========");
+console.log(response);
+
+// ADD THIS BLOCK HERE
+if (
+    response.status === "INSUFFICIENT_BALANCE" ||
+    response.status === "INVALID_PLAN" ||
+    response.status === "INVALID_NETWORK" ||
+    response.status === "INVALID_PHONE"
+) {
+
+    await WalletService.creditWithClient(
+        userId,
+        {
+            amount,
+            source: "REFUND",
+            service: "DATA",
+            reference: `${reference}-REFUND`,
+            description: "Refund for failed data purchase"
+        },
+        client
+    );
+
+    await TransactionModel.updateStatus(
+        reference,
+        "FAILED",
+        response,
+        client
+    );
+
+    return {
+        success: false,
+        message:
+            response.status === "INSUFFICIENT_BALANCE"
+                ? "Data service is temporarily unavailable. Please try again later."
+                : "Unable to complete your data purchase.",
+        reference,
+        response
+    };
+}
+
+// Wait 3 seconds before querying
 await new Promise(resolve => setTimeout(resolve, 3000));
 
 const queryResponse = await queryTransaction({
@@ -254,21 +295,26 @@ if (
     client
 );
 
-            return {
+            const result = {
     success:
         transactionStatus === "SUCCESS" ||
         transactionStatus === "PENDING",
     reference,
     response: ProviderResponse.data(
-    {
-        network,
-        phone,
-        plan
-    },
-    queryResponse,
-    reference
-  )
+        {
+            network,
+            phone,
+            plan
+        },
+        queryResponse,
+        reference
+    )
 };
+
+console.log("PURCHASE RESULT");
+console.log(result);
+
+return result;
 
         } catch (error) {
 
