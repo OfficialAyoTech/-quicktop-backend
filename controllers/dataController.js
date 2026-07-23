@@ -33,21 +33,24 @@ console.log(req.user);
         if (!result.success) {
 
     return ApiResponse.error(
-        res,
-        result.message || "Unable to complete your data purchase.",
-        400,
-        null,
-        result.reference
-    );
+    res,
+    result.message || "Unable to complete your data purchase. Please try again later.",
+    400,
+    null,
+    result.reference
+);
 
 }
 
         return ApiResponse.success(
-            res,
-            message,
-            result.response,
-            result.reference
-        );
+    res,
+    message,
+    {
+        ...result.response,
+        wallet: result.wallet
+    },
+    result.reference
+);
 
     } catch (error) {
 

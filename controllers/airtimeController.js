@@ -32,12 +32,12 @@ const purchaseAirtime = async (req, res) => {
         if (!result.success) {
 
     return ApiResponse.error(
-        res,
-        "Unable to complete your airtime purchase. Please try again later.",
-        400,
-        null,
-        result.reference
-    );
+    res,
+    result.message || "Unable to complete your airtime purchase.",
+    400,
+    null,
+    result.reference
+);
 
 }
 

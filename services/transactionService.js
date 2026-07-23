@@ -80,6 +80,34 @@ static async purchaseAirtime(userId, payload) {
                 phone,
                 requestId: reference
             });
+            if (response.status === "INSUFFICIENT_BALANCE") {
+
+    await WalletService.creditWithClient(
+        userId,
+        {
+            amount,
+            source: "REFUND",
+            service: "AIRTIME",
+            reference: `${reference}-REFUND`,
+            description: "Refund for failed airtime purchase"
+        },
+        client
+    );
+
+    await TransactionModel.updateStatus(
+        reference,
+        "FAILED",
+        response,
+        client
+    );
+
+    return {
+        success: false,
+        reference,
+        message:
+            "Airtime service is temporarily unavailable. Please try again in a few minutes. If the issue persists, kindly contact support."
+    };
+}
 
             const transactionStatus =
                 response.statuscode === "100"
@@ -200,22 +228,12 @@ static async purchaseData(userId, payload) {
         try {
 
             const response = await buyData({
-    network: networkCode,
-    plan,
-    phone,
-    requestId: reference
-});
-
-console.log("========== BUY DATA RESPONSE ==========");
-console.log(response);
-
-// ADD THIS BLOCK HERE
-if (
-    response.status === "INSUFFICIENT_BALANCE" ||
-    response.status === "INVALID_PLAN" ||
-    response.status === "INVALID_NETWORK" ||
-    response.status === "INVALID_PHONE"
-) {
+                network: networkCode,
+                plan,
+                phone,
+                requestId: reference
+            });
+            if (response.status === "INSUFFICIENT_BALANCE") {
 
     await WalletService.creditWithClient(
         userId,
@@ -238,39 +256,79 @@ if (
 
     return {
         success: false,
-        message:
-            response.status === "INSUFFICIENT_BALANCE"
-                ? "Data service is temporarily unavailable. Please try again later."
-                : "Unable to complete your data purchase.",
         reference,
-        response
+        message:
+            "Data service is temporarily unavailable. Please try again in a few minutes. If the issue persists, kindly contact support."
     };
 }
 
-// Wait 3 seconds before querying
-await new Promise(resolve => setTimeout(resolve, 3000));
+            console.log("========== BUY DATA RESPONSE ==========");
+            console.log(response);
 
-const queryResponse = await queryTransaction({
-    requestId: reference
-});
+            // Provider rejected the request immediately
+            if (
+                response.status === "INSUFFICIENT_BALANCE" ||
+                response.status === "INVALID_PLAN" ||
+                response.status === "INVALID_NETWORK" ||
+                response.status === "INVALID_PHONE"
+            ) {
 
-console.log("========== FINAL QUERY ==========");
-console.log(queryResponse);
+                // Refund wallet
+                await WalletService.creditWithClient(
+                    userId,
+                    {
+                        amount,
+                        source: "REFUND",
+                        service: "DATA",
+                        reference: `${reference}-REFUND`,
+                        description: "Refund for failed data purchase"
+                    },
+                    client
+                );
+
+                // Update transaction
+                await TransactionModel.updateStatus(
+                    reference,
+                    "FAILED",
+                    response,
+                    client
+                );
+
+                return {
+                    success: false,
+                    message:
+                        response.status === "INSUFFICIENT_BALANCE"
+                            ? "Data service is temporarily unavailable. Please try again in a few minutes. If the issue persists, kindly contact support."
+                            : "Unable to complete your data purchase.",
+                    reference,
+                    response
+                };
+            }
+
+            // Wait before querying provider
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            const queryResponse = await queryTransaction({
+                requestId: reference
+            });
+
+            console.log("========== FINAL QUERY ==========");
+            console.log(queryResponse);
 
             let transactionStatus = "PENDING";
 
-if (
-    queryResponse.statuscode === "200" ||
-    queryResponse.status === "ORDER_COMPLETED"
-) {
-    transactionStatus = "SUCCESS";
-} else if (
-    queryResponse.status === "ORDER_RECEIVED"
-) {
-    transactionStatus = "PENDING";
-} else {
-    transactionStatus = "FAILED";
-}
+            if (
+                queryResponse.statuscode === "200" ||
+                queryResponse.status === "ORDER_COMPLETED"
+            ) {
+                transactionStatus = "SUCCESS";
+            } else if (
+                queryResponse.status === "ORDER_RECEIVED"
+            ) {
+                transactionStatus = "PENDING";
+            } else {
+                transactionStatus = "FAILED";
+            }
 
             if (transactionStatus === "FAILED") {
 
@@ -289,11 +347,11 @@ if (
             }
 
             await TransactionModel.updateStatus(
-    reference,
-    transactionStatus,
-    queryResponse,
-    client
-);
+                reference,
+                transactionStatus,
+                queryResponse,
+                client
+            );
 
             const result = {
     success:
@@ -308,15 +366,20 @@ if (
         },
         queryResponse,
         reference
-    )
+    ),
+    wallet: {
+        balance: updatedWallet.balance
+    }
 };
 
-console.log("PURCHASE RESULT");
-console.log(result);
+            console.log("========== PURCHASE RESULT ==========");
+            console.log(result);
 
-return result;
+            return result;
 
         } catch (error) {
+
+            console.error(error);
 
             await WalletService.creditWithClient(
                 userId,
