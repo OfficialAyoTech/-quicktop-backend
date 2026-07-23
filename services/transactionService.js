@@ -265,6 +265,35 @@ static async purchaseData(userId, payload) {
             console.log("========== BUY DATA RESPONSE ==========");
             console.log(response);
 
+            // Provider accepted the request.
+// Don't wait for final confirmation.
+// Mark as PENDING and return immediately.
+
+await TransactionModel.updateStatus(
+    reference,
+    "PENDING",
+    response,
+    client
+);
+
+return {
+    success: true,
+    message: "Your transaction is being processed.",
+    reference,
+    wallet: {
+        balance: updatedWallet.balance
+    },
+    response: ProviderResponse.data(
+        {
+            network,
+            phone,
+            plan
+        },
+        response,
+        reference
+    )
+};
+
             // Provider rejected the request immediately
             if (
                 response.status === "INSUFFICIENT_BALANCE" ||
@@ -305,12 +334,11 @@ static async purchaseData(userId, payload) {
                 };
             }
 
-            // Wait before querying provider
-            await new Promise(resolve => setTimeout(resolve, 3000));
+            // await new Promise(resolve => setTimeout(resolve, 3000));
 
-            const queryResponse = await queryTransaction({
-                requestId: reference
-            });
+// const queryResponse = await queryTransaction({
+//     requestId: reference
+// });
 
             console.log("========== FINAL QUERY ==========");
             console.log(queryResponse);
