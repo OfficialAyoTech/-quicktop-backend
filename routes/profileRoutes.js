@@ -4,6 +4,10 @@ const router = express.Router();
 
 const profileController = require("../controllers/profileController");
 const auth = require("../middleware/auth");
+const validate = require("../middleware/validate");
+const {
+    updateProfileSchema
+} = require("../validators/profileValidator");
 
 // Get Profile
 router.get(
@@ -16,6 +20,7 @@ router.get(
 router.put(
     "/",
     auth,
+    validate(updateProfileSchema),
     profileController.updateProfile
 );
 
