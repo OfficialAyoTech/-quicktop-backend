@@ -14,7 +14,15 @@ const buyDataSchema = Joi.object({
 
     amount: Joi.number()
         .positive()
+        .required(),
+
+    pin: Joi.string()
+        .pattern(/^\d{4}$/)
         .required()
+        .messages({
+            "string.pattern.base": "Transaction PIN must be exactly 4 digits.",
+            "any.required": "Transaction PIN is required."
+        })
 });
 
 module.exports = {

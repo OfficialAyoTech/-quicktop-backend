@@ -1,6 +1,7 @@
 const PaystackService = require("./paystackService");
 const WalletService = require("./walletService");
 const TransactionService = require("./transactionService");
+const NotificationService = require("./notificationService");
 const TransactionModel = require("../models/transactionModel");
 const DatabaseTransaction = require("../helpers/databaseTransaction");
 
@@ -100,6 +101,9 @@ return {
      * Verify Paystack Payment
      */
     static async verifyPayment(user, reference) {
+
+        console.log("🔥 PaymentService.verifyPayment()");
+console.log(reference);
 
         const response =
             await PaystackService.verifyPayment(reference);

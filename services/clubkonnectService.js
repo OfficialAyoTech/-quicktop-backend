@@ -195,10 +195,192 @@ const queryTransaction = async ({ requestId }) => {
 
 };
 
+/**
+ * Verify Electricity Meter
+ */
+const verifyMeter = async ({
+    electricCompany,
+    meterNo,
+    meterType
+}) => {
+
+    try {
+
+        const url =
+            `${BASE_URL}/APIVerifyElectricityV1.asp` +
+            `?UserID=${USER_ID}` +
+            `&APIKey=${API_KEY}` +
+            `&ElectricCompany=${electricCompany}` +
+`&MeterNo=${meterNo}` +
+`&MeterType=${meterType}`;
+
+        console.log("==================================");
+        console.log("Verifying Meter...");
+        console.log(url);
+
+        const response = await httpClient.get(url);
+
+        console.log("Meter Verification Response:");
+        console.log(response.data);
+
+        return response.data;
+
+    } catch (error) {
+
+        console.log("========== VERIFY METER ERROR ==========");
+        console.log(error.response?.data || error.message);
+
+        throw error;
+
+    }
+
+};
+
+/**
+ * Buy Electricity
+ */
+const buyElectricity = async ({
+    electricCompany,
+    meterNo,
+    meterType,
+    amount,
+    phone,
+    requestId,
+    callbackUrl = ""
+}) => {
+
+    try {
+
+        const url =
+            `${BASE_URL}/APIElectricityV1.asp` +
+            `?UserID=${USER_ID}` +
+            `&APIKey=${API_KEY}` +
+           `&ElectricCompany=${electricCompany}` +
+`&MeterType=${meterType}` +
+`&MeterNo=${meterNo}` +
+            `&Amount=${amount}` +
+            `&PhoneNo=${phone}` +
+            `&RequestID=${requestId}` +
+            `&CallBackURL=${encodeURIComponent(callbackUrl)}`;
+
+        console.log("==================================");
+        console.log("Buying Electricity...");
+        console.log(url);
+
+        const response = await httpClient.get(url);
+
+        console.log("Electricity Response:");
+        console.log(response.data);
+
+        return response.data;
+
+    } catch (error) {
+
+        console.log("========== ELECTRICITY ERROR ==========");
+        console.log(error.response?.data || error.message);
+
+        throw error;
+
+    }
+
+};
+
+/**
+ * Verify Cable Smartcard
+ */
+const verifyCable = async ({
+    cableTv,
+    smartCardNo
+}) => {
+
+    try {
+
+        const url =
+            `${BASE_URL}/APIVerifyCableTVV1.asp` +
+            `?UserID=${USER_ID}` +
+            `&APIKey=${API_KEY}` +
+            `&CableTV=${cableTv}` +
+            `&SmartCardNo=${smartCardNo}`;
+
+        console.log("==================================");
+        console.log("Verifying Smartcard...");
+        console.log(url);
+
+        const response = await httpClient.get(url);
+
+        console.log("Cable Verification Response:");
+        console.log(response.data);
+
+        return response.data;
+
+    } catch (error) {
+
+        console.log("========== VERIFY CABLE ERROR ==========");
+        console.log(error.response?.data || error.message);
+
+        throw error;
+
+    }
+
+};
+
+/**
+ * Purchase Cable TV
+ */
+const buyCable = async ({
+    cableTv,
+    packageCode,
+    smartCardNo,
+    phone,
+    requestId,
+    callbackUrl = ""
+}) => {
+
+    try {
+
+        const url =
+            `${BASE_URL}/APICableTVV1.asp` +
+            `?UserID=${USER_ID}` +
+            `&APIKey=${API_KEY}` +
+            `&CableTV=${cableTv}` +
+            `&Package=${packageCode}` +
+            `&SmartCardNo=${smartCardNo}` +
+            `&PhoneNo=${phone}` +
+            `&RequestID=${requestId}` +
+            `&CallBackURL=${encodeURIComponent(callbackUrl)}`;
+
+        console.log("==================================");
+        console.log("Buying Cable TV...");
+        console.log(url);
+
+        const response = await httpClient.get(url);
+
+        console.log("Cable Response:");
+        console.log(response.data);
+
+        return response.data;
+
+    } catch (error) {
+
+        console.log("========== CABLE ERROR ==========");
+        console.log(error.response?.data || error.message);
+
+        throw error;
+
+    }
+
+};
+
 module.exports = {
     getWalletBalance,
     buyAirtime,
     buyData,
     queryTransaction,
     getDataPlans,
+
+    verifyMeter,
+    buyElectricity,
+
+    verifyCable,
+    buyCable
 };

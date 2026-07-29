@@ -54,27 +54,30 @@ class PaystackService {
      */
     static async verifyPayment(reference) {
 
-        try {
+    try {
 
-            const response = await api.get(
-                `/transaction/verify/${reference}`
-            );
+        const response = await api.get(
+            `/transaction/verify/${reference}`
+        );
 
-            return response.data;
+        console.log("========== PAYSTACK VERIFY RESPONSE ==========");
+        console.log(JSON.stringify(response.data, null, 2));
 
-        } catch (error) {
+        return response.data;
 
-            console.log("========== PAYSTACK VERIFY ERROR ==========");
-            console.log(error.response?.data || error.message);
+    } catch (error) {
 
-            throw new Error(
-                error.response?.data?.message ||
-                "Unable to verify payment."
-            );
+        console.log("========== PAYSTACK VERIFY ERROR ==========");
+        console.log(error.response?.data || error.message);
 
-        }
+        throw new Error(
+            error.response?.data?.message ||
+            "Unable to verify payment."
+        );
 
     }
+
+}
 
 }
 

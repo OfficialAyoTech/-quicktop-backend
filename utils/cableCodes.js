@@ -1,0 +1,22 @@
+const CABLE_PACKAGES = {
+    DSTV_PREMIUM: "01",
+    DSTV_COMPACT_PLUS: "02",
+    DSTV_COMPACT: "03",
+    DSTV_CONFAM: "04",
+    DSTV_YANGA: "05",
+    DSTV_PADI: "06",
+
+    GOTV_SUPA: "01",
+    GOTV_MAX: "02",
+    GOTV_JOLLI: "03",
+    GOTV_JINJA: "04",
+    GOTV_SMALLIE: "05",
+
+    STARTIMES_NOVA: "01",
+    STARTIMES_BASIC: "02",
+    STARTIMES_SMART: "03",
+    STARTIMES_CLASSIC: "04",
+    STARTIMES_SUPER: "05"
+};
+
+module.exports = CABLE_PACKAGES;

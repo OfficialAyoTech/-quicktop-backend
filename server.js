@@ -31,6 +31,14 @@ const airtimeRoutes = require("./routes/airtimeRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const dataPlansRoutes = require("./routes/dataPlansRoutes");
+const electricityRoutes = require("./routes/electricityRoutes");
+const cableRoutes = require("./routes/cableRoutes");
+const dashboardRoutes = require("./routes/dashboardRoutes");
+const notificationRoutes = require("./routes/notificationRoutes");
+const favoriteRoutes = require("./routes/favoriteRoutes");
+const pinRoutes = require("./routes/pinRoutes");
+
+const startTransactionWorker = require("./workers/transactionWorker");
 
 const app = express();
 
@@ -94,6 +102,12 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/payments", paymentRoutes);
 // app.use("/api/transfers", transferRoutes);
 app.use("/api/data-plans", dataPlansRoutes);
+app.use("/api/electricity", electricityRoutes);
+app.use("/api/cable", cableRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/notifications", notificationRoutes);
+app.use("/api/favorites", favoriteRoutes);
+app.use("/api/pin", pinRoutes);
 
 // ===================================
 // Home
@@ -130,8 +144,12 @@ pool.connect()
         client.release();
 
         app.listen(PORT, () => {
-            console.log(`🚀 Server running on port ${PORT}`);
-        });
+
+    console.log(`🚀 Server running on port ${PORT}`);
+
+    startTransactionWorker();
+
+});
 
     })
     .catch((err) => {

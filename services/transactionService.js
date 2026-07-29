@@ -3,16 +3,30 @@ const {
     buyAirtime,
     buyData,
     getWalletBalance,
-    queryTransaction
+    queryTransaction,
+    buyElectricity,
+    verifyMeter,
+    verifyCable,
+    buyCable
 } = require("./clubkonnectService");
 const WalletService = require("./walletService");
 const ProviderResponse = require("../helpers/providerResponse");
 const generateReference = require("../utils/referenceGenerator");
 const NETWORKS = require("../utils/networkCodes");
+const {
+    ELECTRICITY_COMPANIES,
+    METER_TYPES
+} = require("../utils/electricityCodes");
 const BadRequestError = require("../errors/BadRequestError");
 const NotFoundError = require("../errors/NotFoundError");
 const ForbiddenError = require("../errors/ForbiddenError");
 const DatabaseTransaction = require("../helpers/databaseTransaction");
+const TransactionStatusService = require("./transactionStatusService");
+
+const { CABLE_TV } = require("../utils/cableProviders");
+const CABLE_PACKAGES = require("../utils/cablePackages");
+const NotificationService = require("./notificationService");
+const PinService = require("./pinService");
 
 class TransactionService {
 
@@ -21,11 +35,25 @@ class TransactionService {
  */
 static async purchaseAirtime(userId, payload) {
 
-    const {
-        network,
-        phone,
-        amount
-    } = payload;
+    console.log("🔥 TRANSACTION SERVICE CALLED");
+    console.log("🔥 NEW PURCHASE AIRTIME FUNCTION");
+
+    console.log("========== AIRTIME PAYLOAD ==========");
+console.log(payload);
+
+const {
+    network,
+    phone,
+    amount,
+    pin
+} = payload;
+
+console.log("PIN RECEIVED:", pin);
+
+await PinService.verifyPin(
+    userId,
+    pin
+);
 
     const networkCode = NETWORKS[network.toUpperCase()];
 
@@ -35,9 +63,7 @@ static async purchaseAirtime(userId, payload) {
 
     const reference = generateReference();
 
-    let walletDebited = false;
-
-    await DatabaseTransaction.run(async (client) => {
+    return await DatabaseTransaction.run(async (client) => {
 
     const updatedWallet = await WalletService.debitWithClient(
         userId,
@@ -50,8 +76,6 @@ static async purchaseAirtime(userId, payload) {
         },
         client
     );
-
-    walletDebited = true;
 
     await TransactionModel.create(
         {
@@ -68,8 +92,6 @@ static async purchaseAirtime(userId, payload) {
         },
         client
     );
-
-});
 
     try {
 
@@ -109,81 +131,93 @@ static async purchaseAirtime(userId, payload) {
     };
 }
 
-            const transactionStatus =
-                response.statuscode === "100"
-                    ? "SUCCESS"
-                    : "FAILED";
+           await TransactionModel.updateStatus(
+    reference,
+    "PENDING",
+    response,
+    client
+);
 
-            if (transactionStatus === "FAILED") {
+setImmediate(async () => {
+    try {
+        await TransactionStatusService.check(
+            reference,
+            userId,
+            amount
+        );
+    } catch (error) {
+        console.error("BACKGROUND CHECK FAILED:", error);
+    }
+});
 
-                await WalletService.credit(userId, {
-                    amount,
-                    source: "REFUND",
-                    service: "AIRTIME",
-                    reference: `${reference}-REFUND`,
-                    description: "Refund for failed airtime purchase"
-                });
-
-            }
-
-            await TransactionModel.updateStatus(
-                reference,
-                transactionStatus,
-                response
-            );
-
-            return {
-                success: transactionStatus === "SUCCESS",
-                reference,
-                response: ProviderResponse.airtime(
-                    {
-                        network,
-                        phone,
-                        amount
-                    },
-                    response,
-                    reference
-                )
-            };
+return {
+    success: true,
+    message: "Your transaction is being processed.",
+    reference,
+    wallet: {
+        balance: updatedWallet.balance
+    },
+    response: ProviderResponse.airtime(
+        {
+            network,
+            phone,
+            amount
+        },
+        response,
+        reference
+    )
+};
 
         } catch (error) {
 
-            if (walletDebited) {
+    console.error(error);
 
-                await WalletService.credit(userId, {
-                    amount,
-                    source: "REFUND",
-                    service: "AIRTIME",
-                    reference: `${reference}-REFUND`,
-                    description: "Refund for failed airtime purchase"
-                });
+    await WalletService.creditWithClient(
+        userId,
+        {
+            amount,
+            source: "REFUND",
+            service: "AIRTIME",
+            reference: `${reference}-REFUND`,
+            description: "Refund for failed airtime purchase"
+        },
+        client
+    );
 
-            }
+    await TransactionModel.updateStatus(
+        reference,
+        "FAILED",
+        {
+            error: error.response?.data || error.message
+        },
+        client
+    );
 
-            await TransactionModel.updateStatus(
-                reference,
-                "FAILED",
-                {
-                    error: error.response?.data || error.message
-                }
-            );
+    throw error;
 
-            throw error;
+}
 
-        }
+});
 
-    }
+}
+
         /**
  * Purchase Data
  */
 static async purchaseData(userId, payload) {
 
     const {
-        network,
-        phone,
-        plan,
-        amount
-    } = payload;
+    network,
+    phone,
+    plan,
+    amount,
+    pin
+} = payload;
+
+await PinService.verifyPin(
+    userId,
+    pin
+);
 
     const networkCode = NETWORKS[network.toUpperCase()];
 
@@ -294,117 +328,6 @@ return {
     )
 };
 
-            // Provider rejected the request immediately
-            if (
-                response.status === "INSUFFICIENT_BALANCE" ||
-                response.status === "INVALID_PLAN" ||
-                response.status === "INVALID_NETWORK" ||
-                response.status === "INVALID_PHONE"
-            ) {
-
-                // Refund wallet
-                await WalletService.creditWithClient(
-                    userId,
-                    {
-                        amount,
-                        source: "REFUND",
-                        service: "DATA",
-                        reference: `${reference}-REFUND`,
-                        description: "Refund for failed data purchase"
-                    },
-                    client
-                );
-
-                // Update transaction
-                await TransactionModel.updateStatus(
-                    reference,
-                    "FAILED",
-                    response,
-                    client
-                );
-
-                return {
-                    success: false,
-                    message:
-                        response.status === "INSUFFICIENT_BALANCE"
-                            ? "Data service is temporarily unavailable. Please try again in a few minutes. If the issue persists, kindly contact support."
-                            : "Unable to complete your data purchase.",
-                    reference,
-                    response
-                };
-            }
-
-            // await new Promise(resolve => setTimeout(resolve, 3000));
-
-// const queryResponse = await queryTransaction({
-//     requestId: reference
-// });
-
-            console.log("========== FINAL QUERY ==========");
-            console.log(queryResponse);
-
-            let transactionStatus = "PENDING";
-
-            if (
-                queryResponse.statuscode === "200" ||
-                queryResponse.status === "ORDER_COMPLETED"
-            ) {
-                transactionStatus = "SUCCESS";
-            } else if (
-                queryResponse.status === "ORDER_RECEIVED"
-            ) {
-                transactionStatus = "PENDING";
-            } else {
-                transactionStatus = "FAILED";
-            }
-
-            if (transactionStatus === "FAILED") {
-
-                await WalletService.creditWithClient(
-                    userId,
-                    {
-                        amount,
-                        source: "REFUND",
-                        service: "DATA",
-                        reference: `${reference}-REFUND`,
-                        description: "Refund for failed data purchase"
-                    },
-                    client
-                );
-
-            }
-
-            await TransactionModel.updateStatus(
-                reference,
-                transactionStatus,
-                queryResponse,
-                client
-            );
-
-            const result = {
-    success:
-        transactionStatus === "SUCCESS" ||
-        transactionStatus === "PENDING",
-    reference,
-    response: ProviderResponse.data(
-        {
-            network,
-            phone,
-            plan
-        },
-        queryResponse,
-        reference
-    ),
-    wallet: {
-        balance: updatedWallet.balance
-    }
-};
-
-            console.log("========== PURCHASE RESULT ==========");
-            console.log(result);
-
-            return result;
-
         } catch (error) {
 
             console.error(error);
@@ -437,6 +360,407 @@ return {
     });
 
 }
+/**
+ * Verify Electricity Meter
+ */
+static async verifyMeter(payload) {
+
+    const {
+        electricCompany,
+        meterType,
+        meterNo
+    } = payload;
+
+    const companyCode =
+        ELECTRICITY_COMPANIES[electricCompany.toUpperCase()];
+
+    const meterTypeCode =
+        METER_TYPES[meterType.toUpperCase()];
+
+    if (!companyCode) {
+        throw new BadRequestError(
+            "Invalid electricity company."
+        );
+    }
+
+    if (!meterTypeCode) {
+        throw new BadRequestError(
+            "Invalid meter type."
+        );
+    }
+
+    return await verifyMeter({
+        electricCompany: companyCode,
+        meterType: meterTypeCode,
+        meterNo
+    });
+
+}
+/**
+ * Verify Cable Smart Card
+ */
+static async verifyCable(payload) {
+
+    const {
+        cableTv,
+        smartCardNo
+    } = payload;
+
+    console.log("========== VERIFY CABLE ==========");
+console.log("Payload:", payload);
+console.log("CABLE_TV:", CABLE_TV);
+console.log("cableTv:", cableTv);
+
+    const cableCode =
+        CABLE_TV[cableTv.toUpperCase()];
+
+    if (!cableCode) {
+        throw new BadRequestError(
+            "Invalid cable TV provider."
+        );
+    }
+
+    return await verifyCable({
+        cableTv: cableCode,
+        smartCardNo
+    });
+
+}
+/**
+ * Purchase Electricity
+ */
+static async purchaseElectricity(userId, payload) {
+
+    const {
+        electricCompany,
+        meterType,
+        meterNo,
+        amount,
+        phone
+    } = payload;
+
+    const companyCode =
+        ELECTRICITY_COMPANIES[electricCompany.toUpperCase()];
+
+    const meterTypeCode =
+        METER_TYPES[meterType.toUpperCase()];
+
+    if (!companyCode) {
+        throw new BadRequestError("Invalid electricity company.");
+    }
+
+    if (!meterTypeCode) {
+        throw new BadRequestError("Invalid meter type.");
+    }
+
+    const reference = generateReference();
+
+    return await DatabaseTransaction.run(async (client) => {
+
+        // Debit wallet
+        const updatedWallet =
+            await WalletService.debitWithClient(
+                userId,
+                {
+                    amount,
+                    source: "WALLET",
+                    service: "ELECTRICITY",
+                    reference,
+                    description: `Electricity purchase for meter ${meterNo}`
+                },
+                client
+            );
+
+        // Save transaction
+        await TransactionModel.create(
+            {
+                user_id: userId,
+                reference,
+                provider: "ClubKonnect",
+                service: "Electricity",
+                phone,
+                amount,
+                status: "PENDING",
+                network: electricCompany,
+                balance_after: updatedWallet.balance,
+                api_response: {}
+            },
+            client
+        );
+
+        try {
+
+            const response =
+                await buyElectricity({
+
+                    electricCompany: companyCode,
+                    meterType: meterTypeCode,
+                    meterNo,
+                    amount,
+                    phone,
+                    requestId: reference
+
+                });
+
+            if (response.status === "INSUFFICIENT_BALANCE") {
+
+                await WalletService.creditWithClient(
+                    userId,
+                    {
+                        amount,
+                        source: "REFUND",
+                        service: "ELECTRICITY",
+                        reference: `${reference}-REFUND`,
+                        description: "Refund for failed electricity purchase"
+                    },
+                    client
+                );
+
+                await TransactionModel.updateStatus(
+                    reference,
+                    "FAILED",
+                    response,
+                    client
+                );
+
+                return {
+                    success: false,
+                    reference,
+                    message:
+                        "Electricity service is temporarily unavailable. Please try again later."
+                };
+
+            }
+
+            await TransactionModel.updateStatus(
+                reference,
+                "PENDING",
+                response,
+                client
+            );
+
+            return {
+    success: true,
+    message: "Electricity purchase is being processed.",
+    reference,
+    wallet: {
+        balance: updatedWallet.balance
+    },
+    response: ProviderResponse.electricity(
+        {
+            electricCompany,
+            meterType,
+            meterNo,
+            amount,
+            phone
+        },
+        response,
+        reference
+    )
+};
+
+        } catch (error) {
+
+            await WalletService.creditWithClient(
+                userId,
+                {
+                    amount,
+                    source: "REFUND",
+                    service: "ELECTRICITY",
+                    reference: `${reference}-REFUND`,
+                    description: "Refund for failed electricity purchase"
+                },
+                client
+            );
+
+            await TransactionModel.updateStatus(
+                reference,
+                "FAILED",
+                {
+                    error: error.response?.data || error.message
+                },
+                client
+            );
+
+            throw error;
+
+        }
+
+    });
+
+}
+/**
+ * Purchase Cable TV
+ */
+static async purchaseCable(userId, payload) {
+
+    const {
+        cableTv,
+        package: cablePackage,
+        smartCardNo,
+        amount,
+        phone
+    } = payload;
+
+    const cableCode =
+    CABLE_TV[cableTv.toUpperCase()];
+
+if (!cableCode) {
+    throw new BadRequestError(
+        "Invalid cable TV provider."
+    );
+}
+
+const packageCode =
+    CABLE_PACKAGES[cableTv.toUpperCase()]?.[
+        `${cableTv.toUpperCase()}-${cablePackage.toUpperCase()}`
+    ];
+
+if (!packageCode) {
+    throw new BadRequestError(
+        "Invalid cable package."
+    );
+}
+
+    const reference = generateReference();
+
+    return await DatabaseTransaction.run(async (client) => {
+
+        // Debit wallet
+        const updatedWallet =
+            await WalletService.debitWithClient(
+                userId,
+                {
+                    amount,
+                    source: "WALLET",
+                    service: "CABLE_TV",
+                    reference,
+                    description: `Cable subscription for ${smartCardNo}`
+                },
+                client
+            );
+
+        // Save transaction
+        await TransactionModel.create(
+            {
+                user_id: userId,
+                reference,
+                provider: "ClubKonnect",
+                service: "Cable TV",
+                phone,
+                amount,
+                status: "PENDING",
+                network: cableTv,
+                balance_after: updatedWallet.balance,
+                api_response: {}
+            },
+            client
+        );
+
+        try {
+
+console.log("Provider:", cableTv);
+console.log("Package Selected:", cablePackage);
+console.log("Package Code:", packageCode);
+
+            const response =
+    await buyCable({
+
+        cableTv: cableCode,
+        packageCode,
+        smartCardNo,
+        phone,
+        requestId: reference
+
+    });
+
+            if (response.status === "INSUFFICIENT_BALANCE") {
+
+                await WalletService.creditWithClient(
+                    userId,
+                    {
+                        amount,
+                        source: "REFUND",
+                        service: "CABLE_TV",
+                        reference: `${reference}-REFUND`,
+                        description: "Refund for failed cable purchase"
+                    },
+                    client
+                );
+
+                await TransactionModel.updateStatus(
+                    reference,
+                    "FAILED",
+                    response,
+                    client
+                );
+
+                return {
+                    success: false,
+                    reference,
+                    message:
+                        "Cable TV service is temporarily unavailable."
+                };
+
+            }
+
+            await TransactionModel.updateStatus(
+                reference,
+                "PENDING",
+                response,
+                client
+            );
+
+            return {
+                success: true,
+                message: "Cable subscription is being processed.",
+                reference,
+                wallet: {
+                    balance: updatedWallet.balance
+                },
+                response: ProviderResponse.cable(
+                    {
+                        cableTv,
+                        package: cablePackage,
+                        smartCardNo,
+                        amount,
+                        phone
+                    },
+                    response,
+                    reference
+                )
+            };
+
+        } catch (error) {
+
+            await WalletService.creditWithClient(
+                userId,
+                {
+                    amount,
+                    source: "REFUND",
+                    service: "CABLE_TV",
+                    reference: `${reference}-REFUND`,
+                    description: "Refund for failed cable purchase"
+                },
+                client
+            );
+
+            await TransactionModel.updateStatus(
+                reference,
+                "FAILED",
+                {
+                    error: error.response?.data || error.message
+                },
+                client
+            );
+
+            throw error;
+
+        }
+
+    });
+
+}
     /**
  * Record Wallet Funding Transaction
  */
@@ -446,7 +770,9 @@ static async recordWalletFunding(
     client = null
 ) {
 
-    return await TransactionModel.create(
+    console.log("🔥 recordWalletFunding() CALLED");
+    
+    const transaction = await TransactionModel.create(
         {
             user_id: userId,
             reference: payload.reference,
@@ -460,6 +786,19 @@ static async recordWalletFunding(
         },
         client
     );
+
+    await NotificationService.notify({
+        user_id: userId,
+        title: "💰 Wallet Funded",
+        message: `₦${payload.amount} has been added to your wallet successfully.`,
+        type: "SUCCESS",
+        metadata: {
+            reference: payload.reference,
+            amount: payload.amount
+        }
+    });
+
+    return transaction;
 
 }
         /**

@@ -2,6 +2,8 @@ class ProviderResponse {
 
     static airtime(payload, providerResponse, reference) {
 
+        console.log("✅ NEW ProviderResponse.airtime() is running");
+
         return {
             reference,
             service: "AIRTIME",
@@ -9,10 +11,7 @@ class ProviderResponse {
             network: payload.network,
             phone: payload.phone,
             amount: Number(payload.amount),
-            status:
-                providerResponse.statuscode === "100"
-                    ? "SUCCESS"
-                    : "FAILED"
+            status: "PENDING"
         };
 
     }
@@ -26,13 +25,42 @@ class ProviderResponse {
             network: payload.network,
             phone: payload.phone,
             plan: payload.plan,
-            status:
-                providerResponse.statuscode === "100"
-                    ? "SUCCESS"
-                    : "FAILED"
+            status: "PENDING"
         };
 
     }
+
+static electricity(payload, providerResponse, reference) {
+
+    return {
+        reference,
+        service: "ELECTRICITY",
+        provider: "ClubKonnect",
+        electricCompany: payload.electricCompany,
+        meterType: payload.meterType,
+        meterNo: payload.meterNo,
+        amount: Number(payload.amount),
+        phone: payload.phone,
+        status: "PENDING"
+    };
+
+}
+
+static cable(payload, providerResponse, reference) {
+
+    return {
+        reference,
+        service: "CABLE_TV",
+        provider: "ClubKonnect",
+        cableTv: payload.cableTv,
+        package: payload.package,
+        smartCardNo: payload.smartCardNo,
+        amount: Number(payload.amount),
+        phone: payload.phone,
+        status: "PENDING"
+    };
+
+}
 
 }
 

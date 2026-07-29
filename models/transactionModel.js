@@ -86,6 +86,30 @@ static async create(transaction, client = pool) {
         return result.rows[0];
     }
 
+/**
+ * Find transaction by reference and user
+ */
+static async findByReferenceAndUser(
+    reference,
+    userId,
+    client = pool
+) {
+
+    const result = await client.query(
+        `
+        SELECT *
+        FROM transactions
+        WHERE reference = $1
+        AND user_id = $2
+        LIMIT 1
+        `,
+        [reference, userId]
+    );
+
+    return result.rows[0];
+
+}
+
     /**
      * Get transactions for a user (with filters & pagination)
      */
@@ -103,8 +127,14 @@ static async create(transaction, client = pool) {
         } = options;
 
         let query = `
-            SELECT *
-            FROM transactions
+            SELECT
+    reference,
+    service,
+    amount,
+    status,
+    network,
+    created_at
+FROM transactions
             WHERE user_id = $1
         `;
 
@@ -182,6 +212,22 @@ static async create(transaction, client = pool) {
 
         return result.rows[0];
     }
+    
+/**
+ * Get all pending transactions
+ */
+static async getPendingTransactions(client = pool) {
+
+    const result = await client.query(`
+        SELECT *
+        FROM transactions
+        WHERE status = 'PENDING'
+        ORDER BY created_at ASC
+    `);
+
+    return result.rows;
+
+}
 
 }
 

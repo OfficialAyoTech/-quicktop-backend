@@ -29,6 +29,10 @@ exports.initializePayment = asyncHandler(async (req, res) => {
  * POST /api/payments/verify
  */
 exports.verifyPayment = asyncHandler(async (req, res) => {
+
+  console.log("🔥 VERIFY PAYMENT ENDPOINT HIT");
+console.log(req.body);
+
   const { error } = verifyPaymentSchema.validate(req.body);
 
   if (error) {
