@@ -64,6 +64,7 @@ class UserModel {
         return result.rows[0];
 
     }
+
     /**
      * Find user by email
      */
@@ -81,36 +82,37 @@ class UserModel {
         return result.rows[0];
 
     }
-}
 
-/**
- * Update user profile
- */
-static async updateProfile(userId, payload, client = pool) {
+    /**
+     * Update user profile
+     */
+    static async updateProfile(userId, payload, client = pool) {
 
-    const {
-        full_name,
-        phone
-    } = payload;
-
-    const result = await client.query(
-        `
-        UPDATE users
-        SET
-            full_name = $1,
-            phone = $2,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $3
-        RETURNING *;
-        `,
-        [
+        const {
             full_name,
-            phone,
-            userId
-        ]
-    );
+            phone
+        } = payload;
 
-    return result.rows[0];
+        const result = await client.query(
+            `
+            UPDATE users
+            SET
+                full_name = $1,
+                phone = $2,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $3
+            RETURNING *;
+            `,
+            [
+                full_name,
+                phone,
+                userId
+            ]
+        );
+
+        return result.rows[0];
+
+    }
 
 }
 
