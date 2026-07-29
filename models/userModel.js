@@ -83,4 +83,35 @@ class UserModel {
     }
 }
 
+/**
+ * Update user profile
+ */
+static async updateProfile(userId, payload, client = pool) {
+
+    const {
+        full_name,
+        phone
+    } = payload;
+
+    const result = await client.query(
+        `
+        UPDATE users
+        SET
+            full_name = $1,
+            phone = $2,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3
+        RETURNING *;
+        `,
+        [
+            full_name,
+            phone,
+            userId
+        ]
+    );
+
+    return result.rows[0];
+
+}
+
 module.exports = UserModel;

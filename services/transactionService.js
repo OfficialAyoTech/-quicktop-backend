@@ -436,8 +436,11 @@ static async purchaseElectricity(userId, payload) {
         meterType,
         meterNo,
         amount,
-        phone
+        phone,
+        pin
     } = payload;
+
+    await PinService.verifyPin(userId, pin);
 
     const companyCode =
         ELECTRICITY_COMPANIES[electricCompany.toUpperCase()];
@@ -599,28 +602,31 @@ static async purchaseCable(userId, payload) {
         package: cablePackage,
         smartCardNo,
         amount,
-        phone
+        phone,
+        pin
     } = payload;
 
+    await PinService.verifyPin(userId, pin);
+
     const cableCode =
-    CABLE_TV[cableTv.toUpperCase()];
+        CABLE_TV[cableTv.toUpperCase()];
 
-if (!cableCode) {
-    throw new BadRequestError(
-        "Invalid cable TV provider."
-    );
-}
+    if (!cableCode) {
+        throw new BadRequestError(
+            "Invalid cable TV provider."
+        );
+    }
 
-const packageCode =
-    CABLE_PACKAGES[cableTv.toUpperCase()]?.[
-        `${cableTv.toUpperCase()}-${cablePackage.toUpperCase()}`
-    ];
+    const packageCode =
+        CABLE_PACKAGES[cableTv.toUpperCase()]?.[
+            cablePackage.toUpperCase()
+        ];
 
-if (!packageCode) {
-    throw new BadRequestError(
-        "Invalid cable package."
-    );
-}
+    if (!packageCode) {
+        throw new BadRequestError(
+            "Invalid cable package."
+        );
+    }
 
     const reference = generateReference();
 

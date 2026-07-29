@@ -46,24 +46,26 @@ const purchaseElectricity = async (req, res) => {
     try {
 
         const {
+    electricCompany,
+    meterType,
+    meterNo,
+    amount,
+    phone,
+    pin
+} = req.body;
+
+const result =
+    await TransactionService.purchaseElectricity(
+        req.user.id,
+        {
             electricCompany,
             meterType,
             meterNo,
             amount,
-            phone
-        } = req.body;
-
-        const result =
-            await TransactionService.purchaseElectricity(
-                req.user.id,
-                {
-                    electricCompany,
-                    meterType,
-                    meterNo,
-                    amount,
-                    phone
-                }
-            );
+            phone,
+            pin
+        }
+    );
 
         return res.status(result.success ? 200 : 400).json({
             success: result.success,

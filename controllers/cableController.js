@@ -41,24 +41,26 @@ const purchaseCable = async (req, res) => {
     try {
 
         const {
+    cableTv,
+    package,
+    smartCardNo,
+    amount,
+    phone,
+    pin
+} = req.body;
+
+const result =
+    await TransactionService.purchaseCable(
+        req.user.id,
+        {
             cableTv,
             package,
             smartCardNo,
             amount,
-            phone
-        } = req.body;
-
-        const result =
-            await TransactionService.purchaseCable(
-                req.user.id,
-                {
-                    cableTv,
-                    package,
-                    smartCardNo,
-                    amount,
-                    phone
-                }
-            );
+            phone,
+            pin
+        }
+    );
 
         return res.status(result.success ? 200 : 400).json({
             success: result.success,

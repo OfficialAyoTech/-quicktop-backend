@@ -24,6 +24,13 @@ console.log(decodedToken);
 
 const dbUser = await UserModel.findByFirebaseUid(decodedToken.uid);
 
+if (!dbUser) {
+    return res.status(401).json({
+        success: false,
+        message: "User account not found."
+    });
+}
+
 console.log("========== POSTGRES USER ==========");
 console.log(dbUser);
 

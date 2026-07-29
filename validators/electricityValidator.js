@@ -12,7 +12,9 @@ const schema = Joi.object({
 
     amount: Joi.number().min(1000).max(200000).required(),
 
-    phone: Joi.string().required()
+    phone: Joi.string().required(),
+
+    pin: Joi.string().pattern(/^[0-9]{4}$/).required()
 });
 
 module.exports = (req, res, next) => {

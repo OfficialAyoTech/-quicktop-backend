@@ -5,7 +5,8 @@ module.exports = (req, res, next) => {
         package,
         smartCardNo,
         amount,
-        phone
+        phone,
+        pin
     } = req.body;
 
     if (
@@ -13,7 +14,8 @@ module.exports = (req, res, next) => {
         !package ||
         !smartCardNo ||
         !amount ||
-        !phone
+        !phone ||
+        !pin
     ) {
 
         return res.status(400).json({

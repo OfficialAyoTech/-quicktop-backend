@@ -37,6 +37,7 @@ const dashboardRoutes = require("./routes/dashboardRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const favoriteRoutes = require("./routes/favoriteRoutes");
 const pinRoutes = require("./routes/pinRoutes");
+const profileRoutes = require("./routes/profileRoutes");
 
 const startTransactionWorker = require("./workers/transactionWorker");
 
@@ -108,6 +109,7 @@ app.use("/api/dashboard", dashboardRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/pin", pinRoutes);
+app.use("/api/profile", profileRoutes);
 
 // ===================================
 // Home
