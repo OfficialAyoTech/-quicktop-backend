@@ -1,5 +1,5 @@
 const NotificationModel = require("../models/notificationModel");
-const NotFoundError = require("../errors/notFoundError");
+const NotFoundError = require("../errors/NotFoundError");
 
 class NotificationService {
 

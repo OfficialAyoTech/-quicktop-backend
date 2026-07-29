@@ -2,8 +2,8 @@ const bcrypt = require("bcrypt");
 
 const PinModel = require("../models/pinModel");
 
-const BadRequestError = require("../errors/badRequestError");
-const UnauthorizedError = require("../errors/unauthorizedError");
+const BadRequestError = require("../errors/BadRequestError");
+const UnauthorizedError = require("../errors/UnauthorizedError");
 
 class PinService {
 
