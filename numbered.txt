@@ -1,0 +1,895 @@
+1:const TransactionModel = require("../models/transactionModel");
+2:const {
+3:    buyAirtime,
+4:    buyData,
+5:    getWalletBalance,
+6:    queryTransaction,
+7:    buyElectricity,
+8:    verifyMeter,
+9:    verifyCable,
+10:    buyCable
+11:} = require("./clubkonnectService");
+12:const WalletService = require("./walletService");
+13:const ProviderResponse = require("../helpers/providerResponse");
+14:const generateReference = require("../utils/referenceGenerator");
+15:const NETWORKS = require("../utils/networkCodes");
+16:const {
+17:    ELECTRICITY_COMPANIES,
+18:    METER_TYPES
+19:} = require("../utils/electricityCodes");
+20:const BadRequestError = require("../errors/BadRequestError");
+21:const NotFoundError = require("../errors/NotFoundError");
+22:const ForbiddenError = require("../errors/ForbiddenError");
+23:const DatabaseTransaction = require("../helpers/databaseTransaction");
+24:const TransactionStatusService = require("./transactionStatusService");
+25:
+26:const { CABLE_TV } = require("../utils/cableProviders");
+27:const CABLE_PACKAGES = require("../utils/cablePackages");
+28:const NotificationService = require("./notificationService");
+29:const PinService = require("./pinService");
+30:
+31:const {
+32:    SERVICES,
+33:    TRANSACTION_STATUS
+34:} = require("../utils/constants");
+35:
+36:class TransactionService {
+37:
+38:    /**
+39: * Purchase Airtime
+40: */
+41:static async purchaseAirtime(userId, payload) {
+42:
+43:    console.log("🔥 TRANSACTION SERVICE CALLED");
+44:    console.log("🔥 NEW PURCHASE AIRTIME FUNCTION");
+45:
+46:    console.log("========== AIRTIME PAYLOAD ==========");
+47:console.log(payload);
+48:
+49:const {
+50:    network,
+51:    phone,
+52:    amount,
+53:    pin
+54:} = payload;
+55:
+56:console.log("PIN RECEIVED:", pin);
+57:
+58:await PinService.verifyPin(
+59:    userId,
+60:    pin
+61:);
+62:
+63:    const networkCode = NETWORKS[network.toUpperCase()];
+64:
+65:    if (!networkCode) {
+66:        throw new BadRequestError("Invalid network.");
+67:    }
+68:
+69:    const reference = generateReference();
+70:
+71:    return await DatabaseTransaction.run(async (client) => {
+72:
+73:    const updatedWallet = await WalletService.debitWithClient(
+74:        userId,
+75:        {
+76:            amount,
+77:            source: "WALLET",
+78:            service: "AIRTIME",
+79:            reference,
+80:            description: `Airtime purchase for ${phone}`
+81:        },
+82:        client
+83:    );
+84:
+85:    await TransactionModel.create(
+86:        {
+87:            user_id: userId,
+88:            reference,
+89:            provider: "ClubKonnect",
+90:            service: SERVICES.AIRTIME,
+91:            phone,
+92:            amount,
+93:            status: "PENDING",
+94:            network,
+95:            balance_after: updatedWallet.balance,
+96:            api_response: {}
+97:        },
+98:        client
+99:    );
+100:
+101:    try {
+102:
+103:    
+104:             const response = await buyAirtime({
+105:                network: networkCode,
+106:                amount,
+107:                phone,
+108:                requestId: reference
+109:            });
+110:            if (response.status === "INSUFFICIENT_BALANCE") {
+111:
+112:    await WalletService.creditWithClient(
+113:        userId,
+114:        {
+115:            amount,
+116:            source: "REFUND",
+117:            service: "AIRTIME",
+118:            reference: `${reference}-REFUND`,
+119:            description: "Refund for failed airtime purchase"
+120:        },
+121:        client
+122:    );
+123:
+124:    await TransactionModel.updateStatus(
+125:        reference,
+126:        "FAILED",
+127:        response,
+128:        client
+129:    );
+130:
+131:    return {
+132:        success: false,
+133:        reference,
+134:        message:
+135:            "Airtime service is temporarily unavailable. Please try again in a few minutes. If the issue persists, kindly contact support."
+136:    };
+137:}
+138:
+139:           await TransactionModel.updateStatus(
+140:    reference,
+141:    "PENDING",
+142:    response,
+143:    client
+144:);
+145:
+146:setImmediate(async () => {
+147:    try {
+148:        await TransactionStatusService.check(
+149:            reference,
+150:            userId,
+151:            amount
+152:        );
+153:    } catch (error) {
+154:        console.error("BACKGROUND CHECK FAILED:", error);
+155:    }
+156:});
+157:
+158:return {
+159:    success: true,
+160:    message: "Your transaction is being processed.",
+161:    reference,
+162:    wallet: {
+163:        balance: updatedWallet.balance
+164:    },
+165:    response: ProviderResponse.airtime(
+166:        {
+167:            network,
+168:            phone,
+169:            amount
+170:        },
+171:        response,
+172:        reference
+173:    )
+174:};
+175:
+176:        } catch (error) {
+177:
+178:    console.error(error);
+179:
+180:    await WalletService.creditWithClient(
+181:        userId,
+182:        {
+183:            amount,
+184:            source: "REFUND",
+185:            service: "AIRTIME",
+186:            reference: `${reference}-REFUND`,
+187:            description: "Refund for failed airtime purchase"
+188:        },
+189:        client
+190:    );
+191:
+192:    await TransactionModel.updateStatus(
+193:        reference,
+194:        "FAILED",
+195:        {
+196:            error: error.response?.data || error.message
+197:        },
+198:        client
+199:    );
+200:
+201:    throw error;
+202:
+203:}
+204:
+205:});
+206:
+207:}
+208:
+209:        /**
+210: * Purchase Data
+211: */
+212:static async purchaseData(userId, payload) {
+213:
+214:    const {
+215:    network,
+216:    phone,
+217:    plan,
+218:    amount,
+219:    pin
+220:} = payload;
+221:
+222:await PinService.verifyPin(
+223:    userId,
+224:    pin
+225:);
+226:
+227:    const networkCode = NETWORKS[network.toUpperCase()];
+228:
+229:    if (!networkCode) {
+230:        throw new BadRequestError("Invalid network.");
+231:    }
+232:
+233:    const reference = generateReference();
+234:
+235:    return await DatabaseTransaction.run(async (client) => {
+236:
+237:        // Debit wallet
+238:        const updatedWallet = await WalletService.debitWithClient(
+239:            userId,
+240:            {
+241:                amount,
+242:                source: "WALLET",
+243:                service: "DATA",
+244:                reference,
+245:                description: `Data purchase for ${phone}`
+246:            },
+247:            client
+248:        );
+249:
+250:        // Save pending transaction
+251:        await TransactionModel.create(
+252:            {
+253:                user_id: userId,
+254:                reference,
+255:                provider: "ClubKonnect",
+256:                service: "Data",
+257:                phone,
+258:                amount,
+259:                status: "PENDING",
+260:                network,
+261:                balance_after: updatedWallet.balance,
+262:                api_response: {}
+263:            },
+264:            client
+265:        );
+266:
+267:        try {
+268:
+269:            const response = await buyData({
+270:                network: networkCode,
+271:                plan,
+272:                phone,
+273:                requestId: reference
+274:            });
+275:            if (response.status === "INSUFFICIENT_BALANCE") {
+276:
+277:    await WalletService.creditWithClient(
+278:        userId,
+279:        {
+280:            amount,
+281:            source: "REFUND",
+282:            service: "DATA",
+283:            reference: `${reference}-REFUND`,
+284:            description: "Refund for failed data purchase"
+285:        },
+286:        client
+287:    );
+288:
+289:    await TransactionModel.updateStatus(
+290:        reference,
+291:        "FAILED",
+292:        response,
+293:        client
+294:    );
+295:
+296:    return {
+297:        success: false,
+298:        reference,
+299:        message:
+300:            "Data service is temporarily unavailable. Please try again in a few minutes. If the issue persists, kindly contact support."
+301:    };
+302:}
+303:
+304:            console.log("========== BUY DATA RESPONSE ==========");
+305:            console.log(response);
+306:
+307:            // Provider accepted the request.
+308:// Don't wait for final confirmation.
+309:// Mark as PENDING and return immediately.
+310:
+311:await TransactionModel.updateStatus(
+312:    reference,
+313:    "PENDING",
+314:    response,
+315:    client
+316:);
+317:
+318:return {
+319:    success: true,
+320:    message: "Your transaction is being processed.",
+321:    reference,
+322:    wallet: {
+323:        balance: updatedWallet.balance
+324:    },
+325:    response: ProviderResponse.data(
+326:        {
+327:            network,
+328:            phone,
+329:            plan
+330:        },
+331:        response,
+332:        reference
+333:    )
+334:};
+335:
+336:        } catch (error) {
+337:
+338:            console.error(error);
+339:
+340:            await WalletService.creditWithClient(
+341:                userId,
+342:                {
+343:                    amount,
+344:                    source: "REFUND",
+345:                    service: "DATA",
+346:                    reference: `${reference}-REFUND`,
+347:                    description: "Refund for failed data purchase"
+348:                },
+349:                client
+350:            );
+351:
+352:            await TransactionModel.updateStatus(
+353:                reference,
+354:                "FAILED",
+355:                {
+356:                    error: error.response?.data || error.message
+357:                },
+358:                client
+359:            );
+360:
+361:            throw error;
+362:
+363:        }
+364:
+365:    });
+366:
+367:}
+368:/**
+369: * Verify Electricity Meter
+370: */
+371:static async verifyMeter(payload) {
+372:
+373:    const {
+374:        electricCompany,
+375:        meterType,
+376:        meterNo
+377:    } = payload;
+378:
+379:    const companyCode =
+380:        ELECTRICITY_COMPANIES[electricCompany.toUpperCase()];
+381:
+382:    const meterTypeCode =
+383:        METER_TYPES[meterType.toUpperCase()];
+384:
+385:    if (!companyCode) {
+386:        throw new BadRequestError(
+387:            "Invalid electricity company."
+388:        );
+389:    }
+390:
+391:    if (!meterTypeCode) {
+392:        throw new BadRequestError(
+393:            "Invalid meter type."
+394:        );
+395:    }
+396:
+397:    return await verifyMeter({
+398:        electricCompany: companyCode,
+399:        meterType: meterTypeCode,
+400:        meterNo
+401:    });
+402:
+403:}
+404:/**
+405: * Verify Cable Smart Card
+406: */
+407:static async verifyCable(payload) {
+408:
+409:    const {
+410:        cableTv,
+411:        smartCardNo
+412:    } = payload;
+413:
+414:    console.log("========== VERIFY CABLE ==========");
+415:console.log("Payload:", payload);
+416:console.log("CABLE_TV:", CABLE_TV);
+417:console.log("cableTv:", cableTv);
+418:
+419:    const cableCode =
+420:        CABLE_TV[cableTv.toUpperCase()];
+421:
+422:    if (!cableCode) {
+423:        throw new BadRequestError(
+424:            "Invalid cable TV provider."
+425:        );
+426:    }
+427:
+428:    return await verifyCable({
+429:        cableTv: cableCode,
+430:        smartCardNo
+431:    });
+432:
+433:}
+434:/**
+435: * Purchase Electricity
+436: */
+437:static async purchaseElectricity(userId, payload) {
+438:
+439:    const {
+440:        electricCompany,
+441:        meterType,
+442:        meterNo,
+443:        amount,
+444:        phone,
+445:        pin
+446:    } = payload;
+447:
+448:    await PinService.verifyPin(userId, pin);
+449:
+450:    const companyCode =
+451:        ELECTRICITY_COMPANIES[electricCompany.toUpperCase()];
+452:
+453:    const meterTypeCode =
+454:        METER_TYPES[meterType.toUpperCase()];
+455:
+456:    if (!companyCode) {
+457:        throw new BadRequestError("Invalid electricity company.");
+458:    }
+459:
+460:    if (!meterTypeCode) {
+461:        throw new BadRequestError("Invalid meter type.");
+462:    }
+463:
+464:    const reference = generateReference();
+465:
+466:    return await DatabaseTransaction.run(async (client) => {
+467:
+468:        // Debit wallet
+469:        const updatedWallet =
+470:            await WalletService.debitWithClient(
+471:                userId,
+472:                {
+473:                    amount,
+474:                    source: "WALLET",
+475:                    service: "ELECTRICITY",
+476:                    reference,
+477:                    description: `Electricity purchase for meter ${meterNo}`
+478:                },
+479:                client
+480:            );
+481:
+482:        // Save transaction
+483:        await TransactionModel.create(
+484:            {
+485:                user_id: userId,
+486:                reference,
+487:                provider: "ClubKonnect",
+488:                service: "Electricity",
+489:                phone,
+490:                amount,
+491:                status: "PENDING",
+492:                network: electricCompany,
+493:                balance_after: updatedWallet.balance,
+494:                api_response: {}
+495:            },
+496:            client
+497:        );
+498:
+499:        try {
+500:
+501:            const response =
+502:                await buyElectricity({
+503:
+504:                    electricCompany: companyCode,
+505:                    meterType: meterTypeCode,
+506:                    meterNo,
+507:                    amount,
+508:                    phone,
+509:                    requestId: reference
+510:
+511:                });
+512:
+513:            if (response.status === "INSUFFICIENT_BALANCE") {
+514:
+515:                await WalletService.creditWithClient(
+516:                    userId,
+517:                    {
+518:                        amount,
+519:                        source: "REFUND",
+520:                        service: "ELECTRICITY",
+521:                        reference: `${reference}-REFUND`,
+522:                        description: "Refund for failed electricity purchase"
+523:                    },
+524:                    client
+525:                );
+526:
+527:                await TransactionModel.updateStatus(
+528:                    reference,
+529:                    "FAILED",
+530:                    response,
+531:                    client
+532:                );
+533:
+534:                return {
+535:                    success: false,
+536:                    reference,
+537:                    message:
+538:                        "Electricity service is temporarily unavailable. Please try again later."
+539:                };
+540:
+541:            }
+542:
+543:            await TransactionModel.updateStatus(
+544:                reference,
+545:                "PENDING",
+546:                response,
+547:                client
+548:            );
+549:
+550:            return {
+551:    success: true,
+552:    message: "Electricity purchase is being processed.",
+553:    reference,
+554:    wallet: {
+555:        balance: updatedWallet.balance
+556:    },
+557:    response: ProviderResponse.electricity(
+558:        {
+559:            electricCompany,
+560:            meterType,
+561:            meterNo,
+562:            amount,
+563:            phone
+564:        },
+565:        response,
+566:        reference
+567:    )
+568:};
+569:
+570:        } catch (error) {
+571:
+572:            await WalletService.creditWithClient(
+573:                userId,
+574:                {
+575:                    amount,
+576:                    source: "REFUND",
+577:                    service: "ELECTRICITY",
+578:                    reference: `${reference}-REFUND`,
+579:                    description: "Refund for failed electricity purchase"
+580:                },
+581:                client
+582:            );
+583:
+584:            await TransactionModel.updateStatus(
+585:                reference,
+586:                "FAILED",
+587:                {
+588:                    error: error.response?.data || error.message
+589:                },
+590:                client
+591:            );
+592:
+593:            throw error;
+594:
+595:        }
+596:
+597:    });
+598:
+599:}
+600:/**
+601: * Purchase Cable TV
+602: */
+603:static async purchaseCable(userId, payload) {
+604:
+605:    const {
+606:        cableTv,
+607:        package: cablePackage,
+608:        smartCardNo,
+609:        amount,
+610:        phone,
+611:        pin
+612:    } = payload;
+613:
+614:    await PinService.verifyPin(userId, pin);
+615:
+616:    const cableCode =
+617:        CABLE_TV[cableTv.toUpperCase()];
+618:
+619:    if (!cableCode) {
+620:        throw new BadRequestError(
+621:            "Invalid cable TV provider."
+622:        );
+623:    }
+624:
+625:    const packageCode =
+626:        CABLE_PACKAGES[cableTv.toUpperCase()]?.[
+627:            cablePackage.toUpperCase()
+628:        ];
+629:
+630:    if (!packageCode) {
+631:        throw new BadRequestError(
+632:            "Invalid cable package."
+633:        );
+634:    }
+635:
+636:    const reference = generateReference();
+637:
+638:    return await DatabaseTransaction.run(async (client) => {
+639:
+640:        // Debit wallet
+641:        const updatedWallet =
+642:            await WalletService.debitWithClient(
+643:                userId,
+644:                {
+645:                    amount,
+646:                    source: "WALLET",
+647:                    service: "CABLE_TV",
+648:                    reference,
+649:                    description: `Cable subscription for ${smartCardNo}`
+650:                },
+651:                client
+652:            );
+653:
+654:        // Save transaction
+655:        await TransactionModel.create(
+656:            {
+657:                user_id: userId,
+658:                reference,
+659:                provider: "ClubKonnect",
+660:                service: "Cable TV",
+661:                phone,
+662:                amount,
+663:                status: "PENDING",
+664:                network: cableTv,
+665:                balance_after: updatedWallet.balance,
+666:                api_response: {}
+667:            },
+668:            client
+669:        );
+670:
+671:        try {
+672:
+673:console.log("Provider:", cableTv);
+674:console.log("Package Selected:", cablePackage);
+675:console.log("Package Code:", packageCode);
+676:
+677:            const response =
+678:    await buyCable({
+679:
+680:        cableTv: cableCode,
+681:        packageCode,
+682:        smartCardNo,
+683:        phone,
+684:        requestId: reference
+685:
+686:    });
+687:
+688:            if (response.status === "INSUFFICIENT_BALANCE") {
+689:
+690:                await WalletService.creditWithClient(
+691:                    userId,
+692:                    {
+693:                        amount,
+694:                        source: "REFUND",
+695:                        service: "CABLE_TV",
+696:                        reference: `${reference}-REFUND`,
+697:                        description: "Refund for failed cable purchase"
+698:                    },
+699:                    client
+700:                );
+701:
+702:                await TransactionModel.updateStatus(
+703:                    reference,
+704:                    "FAILED",
+705:                    response,
+706:                    client
+707:                );
+708:
+709:                return {
+710:                    success: false,
+711:                    reference,
+712:                    message:
+713:                        "Cable TV service is temporarily unavailable."
+714:                };
+715:
+716:            }
+717:
+718:            await TransactionModel.updateStatus(
+719:                reference,
+720:                "PENDING",
+721:                response,
+722:                client
+723:            );
+724:
+725:            return {
+726:                success: true,
+727:                message: "Cable subscription is being processed.",
+728:                reference,
+729:                wallet: {
+730:                    balance: updatedWallet.balance
+731:                },
+732:                response: ProviderResponse.cable(
+733:                    {
+734:                        cableTv,
+735:                        package: cablePackage,
+736:                        smartCardNo,
+737:                        amount,
+738:                        phone
+739:                    },
+740:                    response,
+741:                    reference
+742:                )
+743:            };
+744:
+745:        } catch (error) {
+746:
+747:            await WalletService.creditWithClient(
+748:                userId,
+749:                {
+750:                    amount,
+751:                    source: "REFUND",
+752:                    service: "CABLE_TV",
+753:                    reference: `${reference}-REFUND`,
+754:                    description: "Refund for failed cable purchase"
+755:                },
+756:                client
+757:            );
+758:
+759:            await TransactionModel.updateStatus(
+760:                reference,
+761:                "FAILED",
+762:                {
+763:                    error: error.response?.data || error.message
+764:                },
+765:                client
+766:            );
+767:
+768:            throw error;
+769:
+770:        }
+771:
+772:    });
+773:
+774:}
+775:    /**
+776: * Record Wallet Funding Transaction
+777: */
+778:static async recordWalletFunding(
+779:    userId,
+780:    payload,
+781:    client = null
+782:) {
+783:
+784:    console.log("🔥 recordWalletFunding() CALLED");
+785:    
+786:    const transaction = await TransactionModel.create(
+787:        {
+788:            user_id: userId,
+789:            reference: payload.reference,
+790:            provider: PAYMENT_SOURCES.PAYSTACK,
+791:service: SERVICES.WALLET_FUNDING,
+792:phone: null,
+793:amount: payload.amount,
+794:status: TRANSACTION_STATUS.SUCCESS,
+795:            balance_after: payload.balance_after,
+796:            api_response: payload.api_response || {}
+797:        },
+798:        client
+799:    );
+800:
+801:    await NotificationService.notify({
+802:        user_id: userId,
+803:        title: "💰 Wallet Funded",
+804:        message: `₦${payload.amount} has been added to your wallet successfully.`,
+805:        type: "SUCCESS",
+806:        category: "wallet",
+807:        metadata: {
+808:            reference: payload.reference,
+809:            amount: payload.amount
+810:        }
+811:    });
+812:
+813:    return transaction;
+814:
+815:}
+816:        /**
+817:     * Get all transactions
+818:     */
+819:    static async getTransactions(userId, query = {}) {
+820:
+821:        const page = Number(query.page) || 1;
+822:        const limit = Number(query.limit) || 20;
+823:        const offset = (page - 1) * limit;
+824:
+825:        return await TransactionModel.getTransactions(userId, {
+826:            service: query.service,
+827:            status: query.status,
+828:            limit,
+829:            offset
+830:        });
+831:
+832:    }
+833:
+834:    /**
+835: * Query ClubKonnect Transaction
+836: */
+837:static async queryTransaction(reference) {
+838:
+839:    const response = await queryTransaction({
+840:        requestId: reference
+841:    });
+842:
+843:    let status = "PENDING";
+844:
+845:if (
+846:    response.statuscode === "200" ||
+847:    response.status === "ORDER_COMPLETED"
+848:) {
+849:    status = "SUCCESS";
+850:} else if (
+851:    response.status &&
+852:    (
+853:        response.status.toUpperCase().includes("FAILED") ||
+854:        response.status.toUpperCase().includes("REJECT") ||
+855:        response.status.toUpperCase().includes("CANCEL")
+856:    )
+857:) {
+858:    status = "FAILED";
+859:}
+860:
+861:    await TransactionModel.updateStatus(
+862:        reference,
+863:        status,
+864:        response
+865:    );
+866:
+867:    return response;
+868:
+869:}
+870:
+871:    /**
+872:     * Get transaction by reference
+873:     */
+874:    static async getTransaction(userId, reference) {
+875:
+876:        const transaction =
+877:            await TransactionModel.findByReference(reference);
+878:
+879:        if (!transaction) {
+880:            throw new NotFoundError("Transaction not found.");
+881:        }
+882:
+883:        if (String(transaction.user_id) !== String(userId)) {
+884:   throw new ForbiddenError(
+885:       "Unauthorized access to transaction."
+886:   );
+887:}
+888:
+889:        return transaction;
+890:
+891:    }
+892:
+893:}
+894:
+895:module.exports = TransactionService;

@@ -46,7 +46,7 @@ class TransferService {
                 senderId,
                 {
                     amount,
-                    source: "WALLET",
+                    PAYMENT_SOURCES.WALLET
                     service: SERVICES.TRANSFER,
                     reference: `${reference}-OUT`,
                     description: narration || "Wallet transfer"
@@ -74,10 +74,10 @@ class TransferService {
                     recipient_user_id: recipient.id,
                     reference,
                     provider: "QuickTop",
-                    service: "Transfer",
+                    service: SERVICES.TRANSFER,
                     phone: null,
                     amount,
-                    status: "SUCCESS",
+                    status: TRANSACTION_STATUS.SUCCESS,
                     transaction_type: "TRANSFER",
                     narration,
                     api_response: {}
@@ -86,22 +86,22 @@ class TransferService {
             );
 
             // Receiver transaction
-            await TransactionModel.create(
-                {
-                    user_id: recipient.id,
-                    recipient_user_id: senderId,
-                    reference: `${reference}-IN`,
-                    provider: "QuickTop",
-                    service: "Transfer",
-                    phone: null,
-                    amount,
-                    status: "SUCCESS",
-                    transaction_type: "TRANSFER",
-                    narration,
-                    api_response: {}
-                },
-                client
-            );
+await TransactionModel.create(
+    {
+        user_id: recipient.id,
+        recipient_user_id: senderId,
+        reference: `${reference}-IN`,
+        provider: "QuickTop",
+        service: SERVICES.TRANSFER,
+        phone: null,
+        amount,
+        status: TRANSACTION_STATUS.SUCCESS,
+        transaction_type: "TRANSFER",
+        narration,
+        api_response: {}
+    },
+    client
+);
 
             return {
                 success: true,

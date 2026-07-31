@@ -17,7 +17,7 @@ const authenticateUser = async (req, res, next) => {
         const idToken = authHeader.replace("Bearer ", "").trim();
 
         // Verify Firebase token
-        const decodedToken = await auth.verifyIdToken(idToken);
+const decodedToken = await auth.verifyIdToken(idToken);
 
 console.log("========== FIREBASE TOKEN ==========");
 console.log(decodedToken);
@@ -31,15 +31,38 @@ if (!dbUser) {
     });
 }
 
+if (dbUser.account_status === "DELETED") {
+    return res.status(403).json({
+        success: false,
+        message: "This account has been deleted."
+    });
+}
+
+if (dbUser.account_status !== "ACTIVE") {
+    return res.status(403).json({
+        success: false,
+        message: `Your account is ${dbUser.account_status.toLowerCase()}. Please contact support.`
+    });
+}
+
 console.log("========== POSTGRES USER ==========");
 console.log(dbUser);
 
 req.user = {
     uid: decodedToken.uid,
-    email: decodedToken.email,
-    name: decodedToken.name || decodedToken.email,
-    id: dbUser ? dbUser.id : null,
-    full_name: dbUser ? dbUser.full_name : null
+    id: dbUser.id,
+
+    // Identity
+    email: dbUser.email,
+    full_name: dbUser.full_name,
+    phone: dbUser.phone,
+
+    // Firebase display name
+    name: decodedToken.name || dbUser.full_name,
+
+    // Account
+    is_verified: dbUser.is_verified,
+    account_status: dbUser.account_status
 };
 
 console.log("========== REQ.USER ==========");

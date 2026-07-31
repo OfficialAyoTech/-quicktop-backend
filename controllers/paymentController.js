@@ -2,6 +2,7 @@ const asyncHandler = require("../helpers/asyncHandler");
 const ApiResponse = require("../helpers/apiResponse");
 
 const PaymentService = require("../services/paymentService");
+console.log("✅ paymentController loaded");
 
 const {
   verifyPaymentSchema,

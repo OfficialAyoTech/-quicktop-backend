@@ -46,6 +46,56 @@ class FavoriteModel {
     }
 
     /**
+     * Update Favorite
+     */
+    static async update(id, userId, updates, client = pool) {
+
+        const {
+            nickname,
+            account_number,
+            metadata
+        } = updates;
+
+        const result = await client.query(
+            `
+            UPDATE favorites
+            SET
+                nickname = COALESCE($1, nickname),
+                account_number = COALESCE($2, account_number),
+                metadata = COALESCE($3, metadata),
+                updated_at = NOW()
+            WHERE id = $4
+            AND user_id = $5
+            RETURNING *;
+            `,
+            [nickname, account_number, metadata, id, userId]
+        );
+
+        return result.rows[0];
+
+    }
+
+    /**
+     * Find Existing Duplicate
+     */
+    static async findDuplicate(userId, service, accountNumber, client = pool) {
+
+        const result = await client.query(
+            `
+            SELECT *
+            FROM favorites
+            WHERE user_id = $1
+            AND service = $2
+            AND account_number = $3;
+            `,
+            [userId, service, accountNumber]
+        );
+
+        return result.rows[0];
+
+    }
+
+    /**
      * Get User Favorites
      */
     static async findByUser(userId, service = null, client = pool) {

@@ -66,7 +66,107 @@ const updateProfile = async (req, res) => {
 
 };
 
+/**
+ * Delete Account
+ */
+const deleteAccount = async (req, res) => {
+
+    try {
+
+        const result =
+            await ProfileService.deleteAccount(
+                req.user.id
+            );
+
+        return ApiResponse.success(
+            res,
+            result.message
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Change Phone Number
+ */
+const changePhone = async (req, res) => {
+
+    try {
+
+        const result =
+            await ProfileService.changePhone(
+                req.user.id,
+                req.body.phone
+            );
+
+        return ApiResponse.success(
+            res,
+            "Phone number updated successfully.",
+            result
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Upload Avatar
+ */
+const uploadAvatar = async (req, res) => {
+
+    try {
+
+        const profile =
+            await ProfileService.uploadAvatar(
+                req.user.id,
+                req.body.avatar_url
+            );
+
+        return ApiResponse.success(
+            res,
+            "Avatar updated successfully.",
+            profile
+        );
+
+    } catch (error) {
+
+        console.error(error);
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
 module.exports = {
     getProfile,
-    updateProfile
+    updateProfile,
+    changePhone,
+    uploadAvatar,
+    deleteAccount
 };

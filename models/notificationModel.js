@@ -7,14 +7,12 @@ class NotificationModel {
      */
     static async create(notification, client = pool) {
 
-        console.log("========== INSERTING NOTIFICATION ==========");
-console.log(notification);
-
         const {
             user_id,
             title,
             message,
             type,
+            category = null,
             metadata = {}
         } = notification;
 
@@ -26,10 +24,11 @@ console.log(notification);
                 title,
                 message,
                 type,
+                category,
                 metadata
             )
             VALUES
-            ($1, $2, $3, $4, $5)
+            ($1, $2, $3, $4, $5, $6)
             RETURNING *;
             `,
             [
@@ -37,6 +36,7 @@ console.log(notification);
                 title,
                 message,
                 type,
+                category,
                 metadata
             ]
         );

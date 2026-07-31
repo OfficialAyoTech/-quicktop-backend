@@ -31,4 +31,18 @@ router.patch(
     NotificationController.markAllAsRead
 );
 
+const NotificationPreferenceController = require("../controllers/notificationPreferenceController");
+
+router.get(
+    "/preferences",
+    authenticateUser,
+    NotificationPreferenceController.getPreferences
+);
+
+router.patch(
+    "/preferences",
+    authenticateUser,
+    NotificationPreferenceController.updatePreferences
+);
+
 module.exports = router;

@@ -28,6 +28,12 @@ const CABLE_PACKAGES = require("../utils/cablePackages");
 const NotificationService = require("./notificationService");
 const PinService = require("./pinService");
 
+const {
+    SERVICES,
+    TRANSACTION_STATUS,
+    PAYMENT_SOURCES
+} = require("../utils/constants");
+
 class TransactionService {
 
     /**
@@ -82,7 +88,7 @@ await PinService.verifyPin(
             user_id: userId,
             reference,
             provider: "ClubKonnect",
-            service: "Airtime",
+            service: SERVICES.AIRTIME,
             phone,
             amount,
             status: "PENDING",
@@ -248,10 +254,10 @@ await PinService.verifyPin(
                 user_id: userId,
                 reference,
                 provider: "ClubKonnect",
-                service: "Data",
+                service: SERVICES.DATA,
                 phone,
                 amount,
-                status: "PENDING",
+                status: TRANSACTION_STATUS.PENDING,
                 network,
                 balance_after: updatedWallet.balance,
                 api_response: {}
@@ -782,11 +788,11 @@ static async recordWalletFunding(
         {
             user_id: userId,
             reference: payload.reference,
-            provider: "Paystack",
-            service: "Wallet Funding",
-            phone: null,
-            amount: payload.amount,
-            status: "SUCCESS",
+            provider: PAYMENT_SOURCES.PAYSTACK,
+service: SERVICES.WALLET_FUNDING,
+phone: null,
+amount: payload.amount,
+status: TRANSACTION_STATUS.SUCCESS,
             balance_after: payload.balance_after,
             api_response: payload.api_response || {}
         },
@@ -798,6 +804,7 @@ static async recordWalletFunding(
         title: "💰 Wallet Funded",
         message: `₦${payload.amount} has been added to your wallet successfully.`,
         type: "SUCCESS",
+        category: "wallet",
         metadata: {
             reference: payload.reference,
             amount: payload.amount

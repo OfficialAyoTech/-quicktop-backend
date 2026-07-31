@@ -18,6 +18,19 @@ const updateProfileSchema = Joi.object({
 
 });
 
+const changePhoneSchema = Joi.object({
+
+    phone: Joi.string()
+        .pattern(/^[0-9]{10,15}$/)
+        .required()
+        .messages({
+            "string.pattern.base":
+                "Phone number must contain only digits and be between 10 and 15 digits."
+        })
+
+});
+
 module.exports = {
-    updateProfileSchema
+    updateProfileSchema,
+    changePhoneSchema
 };

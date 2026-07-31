@@ -38,6 +38,8 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const favoriteRoutes = require("./routes/favoriteRoutes");
 const pinRoutes = require("./routes/pinRoutes");
 const profileRoutes = require("./routes/profileRoutes");
+const referralRoutes =
+    require("./routes/referralRoutes");
 
 const startTransactionWorker = require("./workers/transactionWorker");
 
@@ -110,6 +112,10 @@ app.use("/api/notifications", notificationRoutes);
 app.use("/api/favorites", favoriteRoutes);
 app.use("/api/pin", pinRoutes);
 app.use("/api/profile", profileRoutes);
+app.use(
+    "/api/referrals",
+    referralRoutes
+);
 
 // ===================================
 // Home

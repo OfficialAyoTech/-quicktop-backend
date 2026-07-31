@@ -19,6 +19,13 @@ router.get(
     favoriteController.getFavorites
 );
 
+// Update favorite
+router.put(
+    "/:id",
+    auth,
+    favoriteController.updateFavorite
+);
+
 // Get one favorite
 router.get(
     "/:id",

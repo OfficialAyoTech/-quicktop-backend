@@ -2,8 +2,18 @@ const PaystackService = require("./paystackService");
 const WalletService = require("./walletService");
 const TransactionService = require("./transactionService");
 const NotificationService = require("./notificationService");
+
 const TransactionModel = require("../models/transactionModel");
+const ReferralModel = require("../models/referralModel");
+const UserModel = require("../models/userModel");
+
 const DatabaseTransaction = require("../helpers/databaseTransaction");
+const {
+    PAYMENT_SOURCES,
+    SERVICES,
+    TRANSACTION_STATUS
+} = require("../utils/constants");
+
 
 class PaymentService {
 
@@ -36,6 +46,7 @@ class PaymentService {
      * Shared wallet funding logic
      */
     static async processSuccessfulPayment(userId, payment) {
+        console.log("🔥 processSuccessfulPayment() started");
 
         const reference = payment.reference;
 
@@ -63,8 +74,8 @@ class PaymentService {
             userId,
             {
                 amount,
-                source: "PAYSTACK",
-                service: "WALLET_FUNDING",
+                source: PAYMENT_SOURCES.PAYSTACK,
+service: SERVICES.WALLET_FUNDING,
                 reference,
                 description: "Wallet funded via Paystack"
             },
@@ -81,6 +92,76 @@ class PaymentService {
         },
         client
     );
+
+    // Reward referrer after first successful funding
+const fundingCount =
+    await UserModel.countWalletFunding(
+        userId,
+        client
+    );
+
+    console.log("========== REFERRAL DEBUG ==========");
+console.log("Funding Count:", fundingCount);
+
+if (fundingCount === 1) {
+
+    const referral =
+        await ReferralModel.findPendingByUser(
+            userId,
+            client
+        );
+
+        console.log("Pending Referral:");
+console.log(referral);
+
+    if (referral) {
+
+        console.log("✅ Referral reward is about to be processed...");
+        const reward = 500;
+
+        // Credit referrer's wallet
+        await WalletService.creditWithClient(
+            referral.referrer_id,
+            {
+                amount: reward,
+                source: PAYMENT_SOURCES.REFERRAL,
+service: SERVICES.REFERRAL_BONUS,
+                reference: `REF-${reference}`,
+                description: "Referral bonus"
+            },
+            client
+        );
+
+        // Update referral earnings
+        await UserModel.addReferralEarnings(
+            referral.referrer_id,
+            reward,
+            client
+        );
+
+        // Mark referral completed
+        await ReferralModel.completeReferral(
+            referral.id,
+            reward,
+            client
+        );
+
+        // Notify referrer
+        await NotificationService.notify({
+    user_id: referral.referrer_id,
+    title: "Referral Bonus 🎉",
+    message: `Congratulations! You earned ₦${reward} for referring a new user.`,
+    type: "REFERRAL",
+    category: "promotion",
+    metadata: {
+        reward,
+        reference
+    }
+});
+
+    }
+
+}
 
     return updatedWallet;
 
@@ -101,6 +182,7 @@ return {
      * Verify Paystack Payment
      */
     static async verifyPayment(user, reference) {
+        console.log("🔥 verifyPayment() started");
 
         console.log("🔥 PaymentService.verifyPayment()");
 console.log(reference);

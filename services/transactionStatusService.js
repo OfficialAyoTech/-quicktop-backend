@@ -73,6 +73,7 @@ class TransactionStatusService {
                 title: notification.title,
                 message: notification.message,
                 type: "SUCCESS",
+                category: "purchase",
                 metadata: {
                     reference,
                     amount,
@@ -111,6 +112,7 @@ class TransactionStatusService {
                 title: notification.title,
                 message: notification.message,
                 type: "FAILED",
+                category: "purchase",
                 metadata: {
                     reference,
                     amount,

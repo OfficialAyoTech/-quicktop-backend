@@ -42,6 +42,26 @@ exports.getFavorites = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Update Favorite
+ * PUT /api/favorites/:id
+ */
+exports.updateFavorite = asyncHandler(async (req, res) => {
+
+    const favorite = await FavoriteService.updateFavorite(
+        req.user.id,
+        req.params.id,
+        req.body
+    );
+
+    return ApiResponse.success(
+        res,
+        "Favorite updated successfully.",
+        favorite
+    );
+
+});
+
+/**
  * Get One Favorite
  * GET /api/favorites/:id
  */

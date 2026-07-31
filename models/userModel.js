@@ -1,5 +1,10 @@
 const pool = require("../config/database");
 
+const {
+    TRANSACTION_STATUS,
+    SERVICES
+} = require("../utils/constants");
+
 class UserModel {
 
     /**
@@ -84,6 +89,24 @@ class UserModel {
     }
 
     /**
+ * Find user by phone number
+ */
+static async findByPhone(phone, client = pool) {
+
+    const result = await client.query(
+        `
+        SELECT *
+        FROM users
+        WHERE phone = $1
+        `,
+        [phone]
+    );
+
+    return result.rows[0];
+
+}
+
+    /**
      * Update user profile
      */
     static async updateProfile(userId, payload, client = pool) {
@@ -113,6 +136,184 @@ class UserModel {
         return result.rows[0];
 
     }
+
+    /**
+     * Update avatar
+     */
+    static async updateAvatar(userId, avatarUrl, client = pool) {
+
+        const result = await client.query(
+            `
+            UPDATE users
+            SET
+                avatar_url = $1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING *;
+            `,
+            [
+                avatarUrl,
+                userId
+            ]
+        );
+
+        return result.rows[0];
+
+    }
+
+    /**
+     * Update phone number
+     */
+    static async updatePhone(userId, phone, client = pool) {
+
+        const result = await client.query(
+            `
+            UPDATE users
+            SET
+                phone = $1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING *;
+            `,
+            [
+                phone,
+                userId
+            ]
+        );
+
+        return result.rows[0];
+
+    }
+
+    /**
+     * Update last login
+     */
+    static async updateLastLogin(userId, client = pool) {
+
+        await client.query(
+            `
+            UPDATE users
+            SET
+                last_login = CURRENT_TIMESTAMP
+            WHERE id = $1;
+            `,
+            [userId]
+        );
+
+    }
+
+        /**
+     * Soft delete account
+     */
+    static async softDelete(userId, client = pool) {
+
+        const result = await client.query(
+            `
+            UPDATE users
+            SET
+                account_status = 'DELETED',
+                deleted_at = CURRENT_TIMESTAMP,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $1
+            RETURNING *;
+            `,
+            [userId]
+        );
+
+        return result.rows[0];
+
+    }
+
+    /**
+     * Update referral code
+     */
+    static async updateReferralCode(userId, code, client = pool) {
+
+        const result = await client.query(
+            `
+            UPDATE users
+            SET referral_code = $1
+            WHERE id = $2
+            RETURNING *;
+            `,
+            [
+                code,
+                userId
+            ]
+        );
+
+        return result.rows[0];
+
+    }
+
+    /**
+     * Find user by referral code
+     */
+    static async findByReferralCode(code, client = pool) {
+
+        const result = await client.query(
+            `
+            SELECT *
+            FROM users
+            WHERE referral_code = $1
+            `,
+            [code]
+        );
+
+        return result.rows[0];
+
+    }
+
+    /**
+ * Increase referral earnings
+ */
+static async addReferralEarnings(userId, amount, client = pool) {
+
+    const result = await client.query(
+        `
+        UPDATE users
+        SET
+            referral_earnings =
+                referral_earnings + $1
+        WHERE id = $2
+        RETURNING *;
+        `,
+        [
+            amount,
+            userId
+        ]
+    );
+
+    return result.rows[0];
+
+}
+
+/**
+ * Count successful wallet funding transactions
+ */
+static async countWalletFunding(userId, client = pool) {
+
+    const result = await client.query(
+        `
+        SELECT COUNT(*) total
+        FROM transactions
+        WHERE
+            user_id = $1
+        AND
+            service = $2
+        AND
+            status = $3
+        `,
+        [
+            userId,
+            SERVICES.WALLET_FUNDING,
+            TRANSACTION_STATUS.SUCCESS
+        ]
+    );
+
+    return Number(result.rows[0].total);
+
+}
 
 }
 

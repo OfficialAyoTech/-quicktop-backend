@@ -7,37 +7,30 @@ class NotificationService {
      * Create notification
      */
     static async notify({
-    user_id,
-    title,
-    message,
-    type,
-    metadata = {}
-}) {
-
-    console.log("========== NOTIFICATION ==========");
-    console.log({
         user_id,
         title,
         message,
         type,
-        metadata
-    });
+        category = null,
+        metadata = {}
+    }) {
 
-    const notification =
-        await NotificationModel.create({
+        if (category) {
+            const NotificationPreferenceService = require("./notificationPreferenceService");
+            const enabled = await NotificationPreferenceService.isEnabled(user_id, category);
+            if (!enabled) return null;
+        }
+
+        return await NotificationModel.create({
             user_id,
             title,
             message,
             type,
+            category,
             metadata
         });
 
-    console.log("Notification Saved:");
-    console.log(notification);
-
-    return notification;
-
-}
+    }
 
     /**
      * Get all notifications
