@@ -5,15 +5,13 @@ const router = express.Router();
 const profileController = require("../controllers/profileController");
 const auth = require("../middleware/auth");
 const validate = require("../middleware/validate");
+const upload = require("../middleware/upload");
+const { uploadAvatar } = require("../controllers/avatarController");
 
 const {
     updateProfileSchema,
     changePhoneSchema
 } = require("../validators/profileValidator");
-
-const {
-    avatarSchema
-} = require("../validators/avatarValidator");
 
 /**
  * @swagger
@@ -109,11 +107,11 @@ router.put(
  *       401:
  *         description: Unauthorized.
  */
-router.patch(
+router.post(
     "/avatar",
     auth,
-    validate(avatarSchema),
-    profileController.uploadAvatar
+    upload.single("avatar"),
+    uploadAvatar
 );
 
 /**

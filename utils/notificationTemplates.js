@@ -1,6 +1,8 @@
+const { SERVICES } = require("./constants");
+
 const notificationTemplates = {
 
-    "Wallet Funding": {
+    [SERVICES.WALLET_FUNDING]: {
 
         SUCCESS: ({ amount }) => ({
             title: "💰 Wallet Funded",
@@ -9,7 +11,7 @@ const notificationTemplates = {
 
     },
 
-    "Airtime": {
+    [SERVICES.AIRTIME]: {
 
         SUCCESS: ({ amount, phone, network }) => ({
             title: "📱 Airtime Purchase Successful",
@@ -23,7 +25,7 @@ const notificationTemplates = {
 
     },
 
-    "Data": {
+    [SERVICES.DATA]: {
 
         SUCCESS: ({ phone, network }) => ({
             title: "📶 Data Purchase Successful",
@@ -37,7 +39,7 @@ const notificationTemplates = {
 
     },
 
-    "Electricity": {
+    [SERVICES.ELECTRICITY]: {
 
         SUCCESS: () => ({
             title: "⚡ Electricity Purchase Successful",
@@ -51,7 +53,7 @@ const notificationTemplates = {
 
     },
 
-    "Cable TV": {
+    [SERVICES.CABLE_TV]: {
 
         SUCCESS: () => ({
             title: "📺 Cable Subscription Successful",
@@ -60,7 +62,7 @@ const notificationTemplates = {
 
         FAILED: ({ amount }) => ({
             title: "❌ Cable Subscription Failed",
-            message: `Your cable subscription failed. ₦${amount} has been been refunded to your wallet.`
+            message: `Your cable subscription failed. ₦${amount} has been refunded to your wallet.`
         })
 
     }

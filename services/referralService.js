@@ -78,8 +78,7 @@ class ReferralService {
             referral_code:
                 referralCode,
 
-            referral_link:
-                `https://quicktop.app/signup?ref=${referralCode}`,
+            referral_link: `https://officialayotech.github.io/-quicktop/?ref=${referralCode}`,
 
             total_referrals:
                 totalReferrals,

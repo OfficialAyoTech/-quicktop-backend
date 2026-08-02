@@ -26,6 +26,7 @@ const TransactionStatusService = require("./transactionStatusService");
 const { CABLE_TV } = require("../utils/cableProviders");
 const CABLE_PACKAGES = require("../utils/cablePackages");
 const NotificationService = require("./notificationService");
+const notificationTemplates = require("../utils/notificationTemplates");
 const PinService = require("./pinService");
 
 const {
@@ -75,8 +76,8 @@ await PinService.verifyPin(
         userId,
         {
             amount,
-            source: "WALLET",
-            service: "AIRTIME",
+            source: PAYMENT_SOURCES.WALLET,
+            service: SERVICES.AIRTIME,
             reference,
             description: `Airtime purchase for ${phone}`
         },
@@ -91,7 +92,7 @@ await PinService.verifyPin(
             service: SERVICES.AIRTIME,
             phone,
             amount,
-            status: "PENDING",
+            status: TRANSACTION_STATUS.PENDING,
             network,
             balance_after: updatedWallet.balance,
             api_response: {}
@@ -108,14 +109,18 @@ await PinService.verifyPin(
                 phone,
                 requestId: reference
             });
+
+            console.log("========== AIRTIME PROVIDER RESPONSE ==========");
+console.log(response);
+
             if (response.status === "INSUFFICIENT_BALANCE") {
 
     await WalletService.creditWithClient(
         userId,
         {
             amount,
-            source: "REFUND",
-            service: "AIRTIME",
+            source: PAYMENT_SOURCES.REFUND,
+            service: SERVICES.AIRTIME,
             reference: `${reference}-REFUND`,
             description: "Refund for failed airtime purchase"
         },
@@ -129,6 +134,31 @@ await PinService.verifyPin(
         client
     );
 
+    const notification =
+    TransactionStatusService.getNotification(
+        {
+            service: SERVICES.AIRTIME,
+            amount,
+            phone,
+            network,
+            reference
+        },
+        "FAILED"
+    );
+
+await NotificationService.notify({
+    user_id: userId,
+    title: notification.title,
+    message: notification.message,
+    type: "FAILED",
+    category: "purchase",
+    metadata: {
+        reference,
+        amount,
+        service: SERVICES.AIRTIME
+    }
+});
+
     return {
         success: false,
         reference,
@@ -139,7 +169,7 @@ await PinService.verifyPin(
 
            await TransactionModel.updateStatus(
     reference,
-    "PENDING",
+    TRANSACTION_STATUS.PENDING,
     response,
     client
 );
@@ -240,8 +270,8 @@ await PinService.verifyPin(
             userId,
             {
                 amount,
-                source: "WALLET",
-                service: "DATA",
+                source: PAYMENT_SOURCES.WALLET,
+                service: SERVICES.DATA,
                 reference,
                 description: `Data purchase for ${phone}`
             },
@@ -273,14 +303,15 @@ await PinService.verifyPin(
                 phone,
                 requestId: reference
             });
+
             if (response.status === "INSUFFICIENT_BALANCE") {
 
     await WalletService.creditWithClient(
         userId,
         {
             amount,
-            source: "REFUND",
-            service: "DATA",
+            source: PAYMENT_SOURCES.REFUND,
+            service: SERVICES.DATA,
             reference: `${reference}-REFUND`,
             description: "Refund for failed data purchase"
         },
@@ -289,10 +320,24 @@ await PinService.verifyPin(
 
     await TransactionModel.updateStatus(
         reference,
-        "FAILED",
+        TRANSACTION_STATUS.FAILED,
         response,
         client
     );
+
+    await NotificationService.notify({
+    user_id: userId,
+    title: "❌ Data Purchase Failed",
+    message:
+        `Your data purchase of ₦${amount} could not be completed. Your wallet has been refunded.`,
+    type: "FAILED",
+    category: "purchase",
+    metadata: {
+        reference,
+        amount,
+        service: SERVICES.DATA
+    }
+});
 
     return {
         success: false,
@@ -311,10 +356,25 @@ await PinService.verifyPin(
 
 await TransactionModel.updateStatus(
     reference,
-    "PENDING",
+    TRANSACTION_STATUS.PENDING,
     response,
     client
 );
+
+setImmediate(async () => {
+    try {
+        await TransactionStatusService.check(
+            reference,
+            userId,
+            amount
+        );
+    } catch (error) {
+        console.error(
+            "BACKGROUND CHECK FAILED:",
+            error
+        );
+    }
+});
 
 return {
     success: true,
@@ -342,8 +402,8 @@ return {
                 userId,
                 {
                     amount,
-                    source: "REFUND",
-                    service: "DATA",
+                    source: PAYMENT_SOURCES.REFUND,
+                    service: SERVICES.DATA,
                     reference: `${reference}-REFUND`,
                     description: "Refund for failed data purchase"
                 },
@@ -352,7 +412,7 @@ return {
 
             await TransactionModel.updateStatus(
                 reference,
-                "FAILED",
+                TRANSACTION_STATUS.FAILED,
                 {
                     error: error.response?.data || error.message
                 },
@@ -472,8 +532,8 @@ static async purchaseElectricity(userId, payload) {
                 userId,
                 {
                     amount,
-                    source: "WALLET",
-                    service: "ELECTRICITY",
+                    source: PAYMENT_SOURCES.WALLET,
+                    service: SERVICES.ELECTRICITY,
                     reference,
                     description: `Electricity purchase for meter ${meterNo}`
                 },
@@ -486,10 +546,10 @@ static async purchaseElectricity(userId, payload) {
                 user_id: userId,
                 reference,
                 provider: "ClubKonnect",
-                service: "Electricity",
+                service: SERVICES.ELECTRICITY,
                 phone,
                 amount,
-                status: "PENDING",
+                status: TRANSACTION_STATUS.PENDING,
                 network: electricCompany,
                 balance_after: updatedWallet.balance,
                 api_response: {}
@@ -517,8 +577,8 @@ static async purchaseElectricity(userId, payload) {
                     userId,
                     {
                         amount,
-                        source: "REFUND",
-                        service: "ELECTRICITY",
+                        source: PAYMENT_SOURCES.REFUND,
+                        service: SERVICES.ELECTRICITY,
                         reference: `${reference}-REFUND`,
                         description: "Refund for failed electricity purchase"
                     },
@@ -527,10 +587,28 @@ static async purchaseElectricity(userId, payload) {
 
                 await TransactionModel.updateStatus(
                     reference,
-                    "FAILED",
+                    TRANSACTION_STATUS.FAILED,
                     response,
                     client
                 );
+
+                const notification =
+    notificationTemplates[SERVICES.ELECTRICITY].FAILED({
+        amount
+    });
+
+await NotificationService.notify({
+    user_id: userId,
+    title: notification.title,
+    message: notification.message,
+    type: "FAILED",
+    category: "purchase",
+    metadata: {
+        reference,
+        amount,
+        service: SERVICES.ELECTRICITY
+    }
+});
 
                 return {
                     success: false,
@@ -543,10 +621,25 @@ static async purchaseElectricity(userId, payload) {
 
             await TransactionModel.updateStatus(
                 reference,
-                "PENDING",
+                TRANSACTION_STATUS.PENDING,
                 response,
                 client
             );
+
+            setImmediate(async () => {
+    try {
+        await TransactionStatusService.check(
+            reference,
+            userId,
+            amount
+        );
+    } catch (error) {
+        console.error(
+            "BACKGROUND CHECK FAILED:",
+            error
+        );
+    }
+});
 
             return {
     success: true,
@@ -574,8 +667,8 @@ static async purchaseElectricity(userId, payload) {
                 userId,
                 {
                     amount,
-                    source: "REFUND",
-                    service: "ELECTRICITY",
+                    source: PAYMENT_SOURCES.REFUND,
+                    service: SERVICES.ELECTRICITY,
                     reference: `${reference}-REFUND`,
                     description: "Refund for failed electricity purchase"
                 },
@@ -584,7 +677,7 @@ static async purchaseElectricity(userId, payload) {
 
             await TransactionModel.updateStatus(
                 reference,
-                "FAILED",
+                TRANSACTION_STATUS.FAILED,
                 {
                     error: error.response?.data || error.message
                 },
@@ -644,8 +737,8 @@ static async purchaseCable(userId, payload) {
                 userId,
                 {
                     amount,
-                    source: "WALLET",
-                    service: "CABLE_TV",
+                    source: PAYMENT_SOURCES.WALLET,
+                    service: SERVICES.CABLE_TV,
                     reference,
                     description: `Cable subscription for ${smartCardNo}`
                 },
@@ -658,10 +751,10 @@ static async purchaseCable(userId, payload) {
                 user_id: userId,
                 reference,
                 provider: "ClubKonnect",
-                service: "Cable TV",
+                service: SERVICES.CABLE_TV,
                 phone,
                 amount,
-                status: "PENDING",
+                status: TRANSACTION_STATUS.PENDING,
                 network: cableTv,
                 balance_after: updatedWallet.balance,
                 api_response: {}
@@ -692,8 +785,8 @@ console.log("Package Code:", packageCode);
                     userId,
                     {
                         amount,
-                        source: "REFUND",
-                        service: "CABLE_TV",
+                        source: PAYMENT_SOURCES.REFUND,
+                        service: SERVICES.CABLE_TV,
                         reference: `${reference}-REFUND`,
                         description: "Refund for failed cable purchase"
                     },
@@ -702,10 +795,28 @@ console.log("Package Code:", packageCode);
 
                 await TransactionModel.updateStatus(
                     reference,
-                    "FAILED",
+                    TRANSACTION_STATUS.FAILED,
                     response,
                     client
                 );
+
+                const notification =
+    notificationTemplates[SERVICES.CABLE_TV].FAILED({
+        amount
+    });
+
+await NotificationService.notify({
+    user_id: userId,
+    title: notification.title,
+    message: notification.message,
+    type: "FAILED",
+    category: "purchase",
+    metadata: {
+        reference,
+        amount,
+        service: SERVICES.CABLE_TV
+    }
+});
 
                 return {
                     success: false,
@@ -718,10 +829,22 @@ console.log("Package Code:", packageCode);
 
             await TransactionModel.updateStatus(
                 reference,
-                "PENDING",
+                TRANSACTION_STATUS.PENDING,
                 response,
                 client
             );
+
+            setImmediate(async () => {
+    try {
+        await TransactionStatusService.check(
+            reference,
+            userId,
+            amount
+        );
+    } catch (error) {
+        console.error("BACKGROUND CHECK FAILED:", error);
+    }
+});
 
             return {
                 success: true,
@@ -749,8 +872,8 @@ console.log("Package Code:", packageCode);
                 userId,
                 {
                     amount,
-                    source: "REFUND",
-                    service: "CABLE_TV",
+                    source: PAYMENT_SOURCES.REFUND,
+                    service: SERVICES.CABLE_TV,
                     reference: `${reference}-REFUND`,
                     description: "Refund for failed cable purchase"
                 },
@@ -759,7 +882,7 @@ console.log("Package Code:", packageCode);
 
             await TransactionModel.updateStatus(
                 reference,
-                "FAILED",
+                TRANSACTION_STATUS.FAILED,
                 {
                     error: error.response?.data || error.message
                 },

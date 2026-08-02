@@ -5,7 +5,11 @@ const requiredEnv = [
     "PAYSTACK_BASE_URL",
     "CK_USER_ID",
     "CK_API_KEY",
-    "CK_BASE"
+    "CK_BASE",
+
+    "CLOUDINARY_CLOUD_NAME",
+    "CLOUDINARY_API_KEY",
+    "CLOUDINARY_API_SECRET"
 ];
 
 function validateEnv() {
