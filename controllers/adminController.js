@@ -185,6 +185,64 @@ const getUsers = async (req, res) => {
 };
 
 /**
+ * Get all wallets
+ */
+const getWallets = async (req, res) => {
+
+    try {
+
+        const wallets =
+            await AdminService.getWallets();
+
+        return ApiResponse.success(
+            res,
+            "Wallets retrieved successfully.",
+            wallets
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Get single wallet
+ */
+const getWallet = async (req, res) => {
+
+    try {
+
+        const wallet =
+            await AdminService.getWalletByUserId(
+                req.params.userId
+            );
+
+        return ApiResponse.success(
+            res,
+            "Wallet retrieved successfully.",
+            wallet
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            404
+        );
+
+    }
+
+};
+
+/**
  * Get single user
  */
 const getUserById = async (req, res) => {
@@ -281,5 +339,7 @@ module.exports = {
     getUsers,
     getUserById,
     suspendUser,
-    activateUser
+    activateUser,
+    getWallets,
+    getWallet
 };

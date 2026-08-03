@@ -120,6 +120,7 @@ app.use(
 );
 app.use("/api/kyc", kycRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/push", require("./routes/pushRoutes"));
 
 // ===================================
 // Home

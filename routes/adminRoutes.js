@@ -8,6 +8,20 @@ const requireAdmin = require("../middleware/requireAdmin");
 
 const adminController = require("../controllers/adminController");
 
+const {
+    getDashboard,
+    getAllKyc,
+    getKycById,
+    approveKyc,
+    rejectKyc,
+    getUsers,
+    getUserById,
+    suspendUser,
+    activateUser,
+    getWallets,
+    getWallet
+} = require("../controllers/adminController");
+
 /**
  * @swagger
  * /api/admin/dashboard:
@@ -108,6 +122,23 @@ router.patch(
     auth,
     requireAdmin,
     adminController.activateUser
+);
+
+/**
+ * Wallet Management
+ */
+router.get(
+    "/wallets",
+    auth,
+    admin,
+    getWallets
+);
+
+router.get(
+    "/wallets/:userId",
+    auth,
+    admin,
+    getWallet
 );
 
 module.exports = router;

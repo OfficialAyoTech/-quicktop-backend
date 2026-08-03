@@ -193,6 +193,63 @@ static async updateUserStatus(id, status, client = pool) {
 
 }
 
+/**
+ * Get all wallets
+ */
+static async getWallets(client = pool) {
+
+    const result = await client.query(`
+        SELECT
+            w.id AS wallet_id,
+            w.user_id,
+            u.full_name,
+            u.email,
+            u.phone,
+            w.balance,
+            w.currency,
+            w.status,
+            w.created_at,
+            w.updated_at
+        FROM wallets w
+        JOIN users u
+            ON u.id = w.user_id
+        ORDER BY w.created_at DESC
+    `);
+
+    return result.rows;
+
+}
+
+/**
+ * Get wallet by user ID
+ */
+static async getWalletByUserId(userId, client = pool) {
+
+    const result = await client.query(
+        `
+        SELECT
+            w.id AS wallet_id,
+            w.user_id,
+            u.full_name,
+            u.email,
+            u.phone,
+            w.balance,
+            w.currency,
+            w.status,
+            w.created_at,
+            w.updated_at
+        FROM wallets w
+        JOIN users u
+            ON u.id = w.user_id
+        WHERE w.user_id = $1
+        `,
+        [userId]
+    );
+
+    return result.rows[0];
+
+}
+
 }
 
 module.exports = AdminModel;

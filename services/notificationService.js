@@ -21,7 +21,7 @@ class NotificationService {
             if (!enabled) return null;
         }
 
-        return await NotificationModel.create({
+        const notification = await NotificationModel.create({
             user_id,
             title,
             message,
@@ -29,6 +29,12 @@ class NotificationService {
             category,
             metadata
         });
+
+        // Fire-and-forget — push failures must never affect the caller
+        const PushService = require("./pushService");
+        PushService.sendToUser(user_id, { title, message }).catch(()=>{});
+
+        return notification;
 
     }
 

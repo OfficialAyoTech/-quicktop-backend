@@ -139,6 +139,30 @@ static async getUsers(query) {
 }
 
 /**
+ * Get all wallets
+ */
+static async getWallets() {
+
+    return await AdminModel.getWallets();
+
+}
+
+/**
+ * Get single wallet
+ */
+static async getWalletByUserId(userId) {
+
+    const wallet = await AdminModel.getWalletByUserId(userId);
+
+    if (!wallet) {
+        throw new Error("Wallet not found.");
+    }
+
+    return wallet;
+
+}
+
+/**
  * Get single user
  */
 static async getUserById(id) {
