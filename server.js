@@ -40,6 +40,8 @@ const pinRoutes = require("./routes/pinRoutes");
 const profileRoutes = require("./routes/profileRoutes");
 const referralRoutes =
     require("./routes/referralRoutes");
+const kycRoutes = require("./routes/kycRoutes");
+const adminRoutes = require("./routes/adminRoutes");
 
 const startTransactionWorker = require("./workers/transactionWorker");
 
@@ -116,6 +118,8 @@ app.use(
     "/api/referrals",
     referralRoutes
 );
+app.use("/api/kyc", kycRoutes);
+app.use("/api/admin", adminRoutes);
 
 // ===================================
 // Home

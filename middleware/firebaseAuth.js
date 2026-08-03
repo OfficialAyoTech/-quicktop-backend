@@ -26,7 +26,8 @@ const firebaseAuth = async (req, res, next) => {
             full_name:
                 decodedToken.name ||
                 decodedToken.displayName ||
-                "QuickTop User"
+                "QuickTop User",
+            email_verified: decodedToken.email_verified || false
         };
 
         next();

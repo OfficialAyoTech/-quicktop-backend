@@ -1,0 +1,198 @@
+const pool = require("../config/database");
+
+class AdminModel {
+
+    /**
+     * Dashboard statistics
+     */
+    static async getDashboard(client = pool) {
+
+        const result = await client.query(`
+            SELECT
+                (SELECT COUNT(*) FROM users) AS total_users,
+
+                (SELECT COUNT(*) FROM users
+                 WHERE account_status = 'ACTIVE') AS active_users,
+
+                (SELECT COUNT(*) FROM kyc
+                 WHERE verification_status = 'PENDING') AS pending_kyc,
+
+                (SELECT COUNT(*) FROM kyc
+                 WHERE verification_status = 'VERIFIED') AS verified_kyc,
+
+                (SELECT COALESCE(SUM(balance),0)
+                 FROM wallets
+                 WHERE status='ACTIVE') AS total_wallet_balance,
+
+                (SELECT COUNT(*)
+                 FROM transactions) AS total_transactions,
+
+                (SELECT COUNT(*)
+                 FROM transactions
+                 WHERE DATE(created_at)=CURRENT_DATE) AS today_transactions;
+        `);
+
+        return result.rows[0];
+
+    }
+
+    /**
+ * Get users with pagination, search and filters
+ */
+static async getUsers(options = {}, client = pool) {
+
+    const {
+        page = 1,
+        limit = 10,
+        search = "",
+        role,
+        status,
+        verified
+    } = options;
+
+    const offset = (page - 1) * limit;
+
+    let where = `WHERE 1=1`;
+
+    const values = [];
+    let index = 1;
+
+    if (search) {
+
+        where += `
+            AND (
+                full_name ILIKE $${index}
+                OR email ILIKE $${index}
+                OR phone ILIKE $${index}
+            )
+        `;
+
+        values.push(`%${search}%`);
+        index++;
+
+    }
+
+    if (role) {
+
+        where += ` AND role = $${index}`;
+        values.push(role);
+        index++;
+
+    }
+
+    if (status) {
+
+        where += ` AND account_status = $${index}`;
+        values.push(status);
+        index++;
+
+    }
+
+    if (verified !== undefined) {
+
+        where += ` AND is_verified = $${index}`;
+        values.push(verified);
+        index++;
+
+    }
+
+    // Total count
+    const totalQuery = `
+        SELECT COUNT(*) AS total
+        FROM users
+        ${where}
+    `;
+
+    const totalResult = await client.query(
+        totalQuery,
+        values
+    );
+
+    const total = Number(totalResult.rows[0].total);
+
+    // Users
+    const usersQuery = `
+        SELECT
+            id,
+            full_name,
+            email,
+            phone,
+            role,
+            account_status,
+            is_verified,
+            created_at
+        FROM users
+        ${where}
+        ORDER BY created_at DESC
+        LIMIT $${index}
+        OFFSET $${index + 1}
+    `;
+
+    const userValues = [
+        ...values,
+        limit,
+        offset
+    ];
+
+    const users = await client.query(
+        usersQuery,
+        userValues
+    );
+
+    return {
+        users: users.rows,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total / limit)
+        }
+    };
+
+}
+
+/**
+ * Get user by ID
+ */
+static async getUserById(id, client = pool) {
+
+    const result = await client.query(
+        `
+        SELECT *
+        FROM users
+        WHERE id = $1
+        `,
+        [id]
+    );
+
+    return result.rows[0];
+
+}
+
+/**
+ * Update account status
+ */
+static async updateUserStatus(id, status, client = pool) {
+
+    const result = await client.query(
+        `
+        UPDATE users
+        SET
+            account_status = $1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING *;
+        `,
+        [
+            status,
+            id
+        ]
+    );
+
+    return result.rows[0];
+
+}
+
+}
+
+module.exports = AdminModel;

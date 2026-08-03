@@ -186,6 +186,30 @@ static async findByPhone(phone, client = pool) {
     }
 
     /**
+ * Update user's verification status
+ */
+static async updateVerificationStatus(userId, isVerified, client = pool) {
+
+    const result = await client.query(
+        `
+        UPDATE users
+        SET
+            is_verified = $1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING *;
+        `,
+        [
+            isVerified,
+            userId
+        ]
+    );
+
+    return result.rows[0];
+
+}
+
+    /**
      * Update last login
      */
     static async updateLastLogin(userId, client = pool) {

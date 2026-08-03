@@ -60,6 +60,9 @@ req.user = {
     // Firebase display name
     name: decodedToken.name || dbUser.full_name,
 
+    // Role
+    role: dbUser.role,
+
     // Account
     is_verified: dbUser.is_verified,
     account_status: dbUser.account_status

@@ -12,7 +12,8 @@ const syncUser = async (req, res) => {
         const {
             uid,
             email,
-            full_name
+            full_name,
+            email_verified
         } = req.user;
 
         const {
@@ -78,6 +79,29 @@ const syncUser = async (req, res) => {
         );
 
         user = updatedUser.rows[0];
+
+    }
+
+    // Keep is_verified in sync with Firebase's live email_verified claim,
+    // e.g. when the user clicks a verification link after signing up.
+    if (Boolean(user.is_verified) !== Boolean(email_verified)) {
+
+        const verifiedUpdate = await pool.query(
+            `
+            UPDATE users
+            SET
+                is_verified = $1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING *;
+            `,
+            [
+                email_verified,
+                user.id
+            ]
+        );
+
+        user = verifiedUpdate.rows[0];
 
     }
 
@@ -152,9 +176,10 @@ const syncUser = async (req, res) => {
                 email,
                 full_name,
                 referral_code,
-                referred_by
+                referred_by,
+                is_verified
             )
-            VALUES ($1,$2,$3,$4,$5)
+            VALUES ($1,$2,$3,$4,$5,$6)
             RETURNING *;
             `,
             [
@@ -162,7 +187,8 @@ const syncUser = async (req, res) => {
                 email,
                 full_name || "QuickTop User",
                 myReferralCode,
-                referredBy
+                referredBy,
+                Boolean(email_verified)
             ]
         );
 
