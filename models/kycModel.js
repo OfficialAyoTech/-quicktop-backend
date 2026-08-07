@@ -95,6 +95,9 @@ class KycModel {
                 id_number = $5,
                 id_image_url = $6,
                 selfie_url = $7,
+                verification_status = 'PENDING',
+                rejection_reason = NULL,
+                verified_at = NULL,
                 updated_at = CURRENT_TIMESTAMP
             WHERE user_id = $8
             RETURNING *;

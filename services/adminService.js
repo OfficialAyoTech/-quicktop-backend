@@ -3,6 +3,12 @@ const KycModel = require("../models/kycModel");
 const UserModel = require("../models/userModel");
 const NotificationService = require("./notificationService");
 
+const pool = require("../config/database");
+const WalletModel = require("../models/walletModel");
+const WalletLedgerModel = require("../models/walletLedgerModel");
+const TransactionModel = require("../models/transactionModel");
+const generateReference = require("../utils/referenceGenerator");
+
 class AdminService {
 
     /**
@@ -246,6 +252,484 @@ static async activateUser(id) {
     return {
         message: "User activated successfully."
     };
+
+}
+
+/**
+ * Credit User Wallet (Admin)
+ */
+static async creditWallet(
+    userId,
+    amount,
+    narration = "Admin Wallet Credit"
+) {
+
+    const client = await pool.connect();
+
+    try {
+
+        await client.query("BEGIN");
+
+        const wallet = await WalletModel.findByUserId(
+            userId,
+            client
+        );
+
+        if (!wallet) {
+            throw new Error("Wallet not found.");
+        }
+
+        const lockedWallet =
+            await WalletModel.lockWallet(
+                wallet.id,
+                client
+            );
+
+        const balanceBefore =
+            Number(lockedWallet.balance);
+
+        const balanceAfter =
+            balanceBefore + Number(amount);
+
+        await WalletModel.updateBalance(
+            wallet.id,
+            balanceAfter,
+            client
+        );
+
+        const reference =
+            generateReference("ADMINCR");
+
+        await WalletLedgerModel.create({
+
+            wallet_id: wallet.id,
+
+            type: "credit",
+
+            source: "ADMIN",
+
+            service: "ADMIN_CREDIT",
+
+            amount,
+
+            balance_before: balanceBefore,
+
+            balance_after: balanceAfter,
+
+            reference,
+
+            description: narration,
+
+            status: "successful"
+
+        }, client);
+
+        await TransactionModel.create({
+
+            user_id: userId,
+
+            reference,
+
+            provider: "ADMIN",
+
+            service: "ADMIN_CREDIT",
+
+            amount,
+
+            status: "successful",
+
+            transaction_type: "ADMIN",
+
+            narration,
+
+            balance_after: balanceAfter,
+
+            api_response: {
+                source: "ADMIN"
+            }
+
+        }, client);
+
+        await NotificationService.notify({
+
+            user_id: userId,
+
+            title: "💰 Wallet Credited",
+
+            message: `₦${amount} has been credited to your wallet by the administrator.`,
+
+            type: "SUCCESS",
+
+            category: "wallet"
+
+        });
+
+        await client.query("COMMIT");
+
+        return {
+            message: "Wallet credited successfully.",
+            reference,
+            balance_before: balanceBefore,
+            balance_after: balanceAfter
+        };
+
+    } catch (error) {
+
+        await client.query("ROLLBACK");
+        throw error;
+
+    } finally {
+
+        client.release();
+
+    }
+
+}
+
+/**
+ * Debit User Wallet (Admin)
+ */
+static async debitWallet(
+    userId,
+    amount,
+    narration = "Admin Wallet Debit"
+) {
+
+    const client = await pool.connect();
+
+    try {
+
+        await client.query("BEGIN");
+
+        // Find wallet
+        const wallet = await WalletModel.findByUserId(
+            userId,
+            client
+        );
+
+        if (!wallet) {
+            throw new Error("Wallet not found.");
+        }
+
+        // Lock wallet
+        const lockedWallet =
+            await WalletModel.lockWallet(
+                wallet.id,
+                client
+            );
+
+        const balanceBefore =
+            Number(lockedWallet.balance);
+
+        // Prevent overdraft
+        if (balanceBefore < Number(amount)) {
+            throw new Error("Insufficient wallet balance.");
+        }
+
+        const balanceAfter =
+            balanceBefore - Number(amount);
+
+        // Update wallet
+        await WalletModel.updateBalance(
+            wallet.id,
+            balanceAfter,
+            client
+        );
+
+        const reference =
+            generateReference("ADMINDB");
+
+        // Wallet Ledger
+        await WalletLedgerModel.create({
+
+            wallet_id: wallet.id,
+
+            type: "debit",
+
+            source: "ADMIN",
+
+            service: "ADMIN_DEBIT",
+
+            amount,
+
+            balance_before: balanceBefore,
+
+            balance_after: balanceAfter,
+
+            reference,
+
+            description: narration,
+
+            status: "successful"
+
+        }, client);
+
+        // Transaction
+        await TransactionModel.create({
+
+            user_id: userId,
+
+            reference,
+
+            provider: "ADMIN",
+
+            service: "ADMIN_DEBIT",
+
+            amount,
+
+            status: "successful",
+
+            transaction_type: "ADMIN",
+
+            narration,
+
+            balance_after: balanceAfter,
+
+            api_response: {
+                source: "ADMIN"
+            }
+
+        }, client);
+
+        // Notification
+        await NotificationService.notify({
+
+            user_id: userId,
+
+            title: "💸 Wallet Debited",
+
+            message: `₦${amount} has been deducted from your wallet by the administrator.`,
+
+            type: "SUCCESS",
+
+            category: "wallet"
+
+        });
+
+        await client.query("COMMIT");
+
+        return {
+            message: "Wallet debited successfully.",
+            reference,
+            balance_before: balanceBefore,
+            balance_after: balanceAfter
+        };
+
+    } catch (error) {
+
+        await client.query("ROLLBACK");
+        throw error;
+
+    } finally {
+
+        client.release();
+
+    }
+
+}
+
+/**
+ * Get all transactions
+ */
+static async getTransactions(query) {
+
+    return await AdminModel.getTransactions({
+
+        page: Number(query.page) || 1,
+
+        limit: Number(query.limit) || 20,
+
+        status: query.status,
+
+        service: query.service,
+
+        provider: query.provider,
+
+        transaction_type: query.transaction_type,
+
+        search: query.search
+
+    });
+
+}
+
+/**
+ * Get single transaction
+ */
+static async getTransaction(reference) {
+
+    const transaction =
+        await AdminModel.getTransaction(reference);
+
+    if (!transaction) {
+
+        throw new Error("Transaction not found.");
+
+    }
+
+    return transaction;
+
+}
+
+/**
+ * Reverse transaction
+ */
+static async reverseTransaction(reference) {
+
+    const client = await pool.connect();
+
+    try {
+
+        await client.query("BEGIN");
+
+        // Find original transaction
+        const transaction =
+            await TransactionModel.getByReference(
+                reference,
+                client
+            );
+
+        if (!transaction) {
+            throw new Error("Transaction not found.");
+        }
+
+        if (transaction.status !== "successful") {
+            throw new Error(
+                "Only successful transactions can be reversed."
+            );
+        }
+
+        // Find user's wallet
+        const wallet =
+            await WalletModel.findByUserId(
+                transaction.user_id,
+                client
+            );
+
+        if (!wallet) {
+            throw new Error("Wallet not found.");
+        }
+
+        // Lock wallet
+        const lockedWallet =
+            await WalletModel.lockWallet(
+                wallet.id,
+                client
+            );
+
+        const balanceBefore =
+            Number(lockedWallet.balance);
+
+        const balanceAfter =
+            balanceBefore + Number(transaction.amount);
+
+        // Credit wallet back
+        await WalletModel.updateBalance(
+            wallet.id,
+            balanceAfter,
+            client
+        );
+
+        const reversalReference =
+            generateReference("REV");
+
+        // Wallet Ledger
+        await WalletLedgerModel.create({
+
+            wallet_id: wallet.id,
+
+            type: "credit",
+
+            source: "ADMIN",
+
+            service: "REVERSAL",
+
+            amount: transaction.amount,
+
+            balance_before: balanceBefore,
+
+            balance_after: balanceAfter,
+
+            reference: reversalReference,
+
+            description: `Reversal of ${transaction.reference}`,
+
+            status: "successful"
+
+        }, client);
+
+        // Reversal Transaction
+        await TransactionModel.create({
+
+            user_id: transaction.user_id,
+
+            reference: reversalReference,
+
+            provider: "ADMIN",
+
+            service: "REVERSAL",
+
+            amount: transaction.amount,
+
+            status: "successful",
+
+            transaction_type: "REVERSAL",
+
+            narration:
+                `Reversal of ${transaction.reference}`,
+
+            balance_after: balanceAfter,
+
+            api_response: {
+                reversed_reference: transaction.reference
+            }
+
+        }, client);
+
+        // Mark original transaction
+        await TransactionModel.changeStatus(
+            transaction.reference,
+            "reversed",
+            client
+        );
+
+        // Notify user
+        await NotificationService.notify({
+
+            user_id: transaction.user_id,
+
+            title: "↩️ Transaction Reversed",
+
+            message:
+                `₦${transaction.amount} has been refunded to your wallet.`,
+
+            type: "SUCCESS",
+
+            category: "wallet"
+
+        });
+
+        await client.query("COMMIT");
+
+        return {
+
+            message: "Transaction reversed successfully.",
+
+            reversal_reference: reversalReference
+
+        };
+
+    } catch (error) {
+
+        await client.query("ROLLBACK");
+
+        throw error;
+
+    } finally {
+
+        client.release();
+
+    }
 
 }
 

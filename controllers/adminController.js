@@ -330,6 +330,169 @@ const activateUser = async (req, res) => {
 
 };
 
+/**
+ * Credit wallet
+ */
+const creditWallet = async (req, res) => {
+
+    try {
+
+        const result =
+            await AdminService.creditWallet(
+    req.params.userId,
+    req.body.amount,
+    req.body.reason
+);
+
+        return ApiResponse.success(
+            res,
+            result.message
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Debit wallet
+ */
+const debitWallet = async (req, res) => {
+
+    try {
+
+        const result =
+            await AdminService.debitWallet(
+
+                req.params.userId,
+
+                req.body.amount,
+
+                req.body.reason
+
+            );
+
+        return ApiResponse.success(
+
+            res,
+
+            result.message,
+
+            result
+
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+
+            res,
+
+            error.message,
+
+            400
+
+        );
+
+    }
+
+};
+
+/**
+ * Get all transactions
+ */
+const getTransactions = async (req, res) => {
+
+    try {
+
+        const transactions =
+            await AdminService.getTransactions(req.query);
+
+        return ApiResponse.success(
+            res,
+            "Transactions retrieved successfully.",
+            transactions
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Get single transaction
+ */
+const getTransaction = async (req, res) => {
+
+    try {
+
+        const transaction =
+            await AdminService.getTransaction(
+                req.params.reference
+            );
+
+        return ApiResponse.success(
+            res,
+            "Transaction retrieved successfully.",
+            transaction
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            404
+        );
+
+    }
+
+};
+
+/**
+ * Reverse transaction
+ */
+const reverseTransaction = async (req, res) => {
+
+    try {
+
+        const result =
+            await AdminService.reverseTransaction(
+                req.params.reference
+            );
+
+        return ApiResponse.success(
+            res,
+            result.message,
+            result
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
@@ -341,5 +504,10 @@ module.exports = {
     suspendUser,
     activateUser,
     getWallets,
-    getWallet
+    getWallet,
+    creditWallet,
+    debitWallet,
+    getTransactions,
+    getTransaction,
+    reverseTransaction
 };

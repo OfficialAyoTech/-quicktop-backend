@@ -229,6 +229,44 @@ static async getPendingTransactions(client = pool) {
 
 }
 
+/**
+ * Get transaction by reference
+ */
+static async getByReference(reference, client = pool) {
+
+    const result = await client.query(
+        `
+        SELECT *
+        FROM transactions
+        WHERE reference = $1
+        LIMIT 1
+        `,
+        [reference]
+    );
+
+    return result.rows[0];
+
+}
+
+/**
+ * Update transaction status
+ */
+static async changeStatus(reference, status, client = pool) {
+
+    const result = await client.query(
+        `
+        UPDATE transactions
+        SET status = $1
+        WHERE reference = $2
+        RETURNING *;
+        `,
+        [status, reference]
+    );
+
+    return result.rows[0];
+
+}
+
 }
 
 module.exports = TransactionModel;

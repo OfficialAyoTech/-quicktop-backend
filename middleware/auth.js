@@ -3,6 +3,8 @@ const UserModel = require("../models/userModel");
 
 const authenticateUser = async (req, res, next) => {
 
+    console.log("🔥 authenticateUser middleware reached");
+
     try {
 
         const authHeader = req.headers.authorization;
@@ -69,6 +71,9 @@ req.user = {
 };
 
 console.log("========== REQ.USER ==========");
+console.log(req.user);
+
+console.log("========== AUTH USER ==========");
 console.log(req.user);
 
         next();

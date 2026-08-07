@@ -250,6 +250,258 @@ static async getWalletByUserId(userId, client = pool) {
 
 }
 
+/**
+ * Get wallet by wallet ID
+ */
+static async getWalletById(walletId, client = pool) {
+
+    const result = await client.query(
+        `
+        SELECT *
+        FROM wallets
+        WHERE id = $1
+        `,
+        [walletId]
+    );
+
+    return result.rows[0];
+
+}
+
+/**
+ * Credit wallet
+ */
+static async creditWallet(userId, amount, client = pool) {
+
+    const result = await client.query(
+        `
+        UPDATE wallets
+        SET
+            balance = balance + $1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE user_id = $2
+        RETURNING *;
+        `,
+        [
+            amount,
+            userId
+        ]
+    );
+
+    return result.rows[0];
+
+}
+
+/**
+ * Get all transactions
+ */
+static async getTransactions(options = {}, client = pool) {
+
+    const {
+
+        page = 1,
+
+        limit = 20,
+
+        status,
+
+        service,
+
+        provider,
+
+        transaction_type,
+
+        search
+
+    } = options;
+
+    const offset = (page - 1) * limit;
+
+    let where = `WHERE 1=1`;
+
+    const values = [];
+
+    let index = 1;
+
+    if (status) {
+
+        where += ` AND t.status = $${index}`;
+
+        values.push(status);
+
+        index++;
+
+    }
+
+    if (service) {
+
+        where += ` AND t.service = $${index}`;
+
+        values.push(service);
+
+        index++;
+
+    }
+
+    if (provider) {
+
+        where += ` AND t.provider = $${index}`;
+
+        values.push(provider);
+
+        index++;
+
+    }
+
+    if (transaction_type) {
+
+        where += ` AND t.transaction_type = $${index}`;
+
+        values.push(transaction_type);
+
+        index++;
+
+    }
+
+    if (search) {
+
+        where += `
+            AND (
+
+                t.reference ILIKE $${index}
+
+                OR u.full_name ILIKE $${index}
+
+                OR u.email ILIKE $${index}
+
+            )
+        `;
+
+        values.push(`%${search}%`);
+
+        index++;
+
+    }
+
+    const totalResult = await client.query(
+
+        `
+
+        SELECT COUNT(*) total
+
+        FROM transactions t
+
+        JOIN users u
+
+        ON u.id = t.user_id
+
+        ${where}
+
+        `,
+
+        values
+
+    );
+
+    const total = Number(totalResult.rows[0].total);
+
+    const result = await client.query(
+
+        `
+
+        SELECT
+
+            t.*,
+
+            u.full_name,
+
+            u.email
+
+        FROM transactions t
+
+        JOIN users u
+
+        ON u.id = t.user_id
+
+        ${where}
+
+        ORDER BY t.created_at DESC
+
+        LIMIT $${index}
+
+        OFFSET $${index + 1}
+
+        `,
+
+        [
+
+            ...values,
+
+            limit,
+
+            offset
+
+        ]
+
+    );
+
+    return {
+
+        transactions: result.rows,
+
+        pagination: {
+
+            page,
+
+            limit,
+
+            total,
+
+            totalPages: Math.ceil(total / limit)
+
+        }
+
+    };
+
+}
+
+/**
+ * Get transaction by reference
+ */
+static async getTransaction(reference, client = pool) {
+
+    const result = await client.query(
+
+        `
+
+        SELECT
+
+            t.*,
+
+            u.full_name,
+
+            u.email,
+
+            u.phone
+
+        FROM transactions t
+
+        JOIN users u
+
+        ON u.id = t.user_id
+
+        WHERE t.reference = $1
+
+        `,
+
+        [reference]
+
+    );
+
+    return result.rows[0];
+
+}
+
 }
 
 module.exports = AdminModel;

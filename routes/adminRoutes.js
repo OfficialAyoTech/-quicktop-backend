@@ -19,7 +19,12 @@ const {
     suspendUser,
     activateUser,
     getWallets,
-    getWallet
+    getWallet,
+    creditWallet,
+    debitWallet,
+    getTransactions,
+    getTransaction,
+    reverseTransaction
 } = require("../controllers/adminController");
 
 /**
@@ -139,6 +144,66 @@ router.get(
     auth,
     admin,
     getWallet
+);
+
+router.post(
+    "/wallets/:userId/credit",
+    auth,
+    admin,
+    creditWallet
+);
+
+router.post(
+
+    "/wallets/:userId/debit",
+
+    auth,
+
+    admin,
+
+    debitWallet
+
+);
+
+/**
+ * Get all transactions
+ */
+router.get(
+    "/transactions",
+    auth,
+    admin,
+    adminController.getTransactions
+);
+
+/**
+ * Get single transaction
+ */
+router.get(
+    "/transactions/:reference",
+    auth,
+    admin,
+    adminController.getTransaction
+);
+
+/**
+ * Reverse transaction
+ */
+router.post(
+    "/transactions/:reference/reverse",
+    auth,
+    admin,
+    reverseTransaction
+);
+
+router.get(
+    "/dashboard",
+    (req, res, next) => {
+        console.log("🔥 ADMIN DASHBOARD ROUTE HIT");
+        next();
+    },
+    auth,
+    admin,
+    adminController.getDashboard
 );
 
 module.exports = router;
