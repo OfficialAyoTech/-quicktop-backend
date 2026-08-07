@@ -4,7 +4,6 @@ const router = express.Router();
 
 const auth = require("../middleware/auth");
 const admin = require("../middleware/admin");
-const requireAdmin = require("../middleware/requireAdmin");
 
 const adminController = require("../controllers/adminController");
 
@@ -95,7 +94,7 @@ router.patch(
 router.get(
     "/users",
     auth,
-    requireAdmin,
+    admin,
     adminController.getUsers
 );
 
@@ -105,7 +104,7 @@ router.get(
 router.get(
     "/users/:id",
     auth,
-    requireAdmin,
+    admin,
     adminController.getUserById
 );
 
@@ -115,7 +114,7 @@ router.get(
 router.patch(
     "/users/:id/suspend",
     auth,
-    requireAdmin,
+    admin,
     adminController.suspendUser
 );
 
@@ -125,7 +124,7 @@ router.patch(
 router.patch(
     "/users/:id/activate",
     auth,
-    requireAdmin,
+    admin,
     adminController.activateUser
 );
 
@@ -154,15 +153,10 @@ router.post(
 );
 
 router.post(
-
     "/wallets/:userId/debit",
-
     auth,
-
     admin,
-
     debitWallet
-
 );
 
 /**
@@ -193,17 +187,6 @@ router.post(
     auth,
     admin,
     reverseTransaction
-);
-
-router.get(
-    "/dashboard",
-    (req, res, next) => {
-        console.log("🔥 ADMIN DASHBOARD ROUTE HIT");
-        next();
-    },
-    auth,
-    admin,
-    adminController.getDashboard
 );
 
 module.exports = router;
