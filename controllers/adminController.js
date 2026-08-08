@@ -502,6 +502,66 @@ const reverseTransaction = async (req, res) => {
 
 };
 
+/**
+ * Get all service statuses
+ */
+const getServiceStatuses = async (req, res) => {
+
+    try {
+
+        const statuses =
+            await ServiceStatusService.getAll();
+
+        return ApiResponse.success(
+            res,
+            "Service statuses retrieved successfully.",
+            statuses
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Toggle a service on/off
+ */
+const toggleService = async (req, res) => {
+
+    try {
+
+        const result =
+            await ServiceStatusService.setEnabled(
+                req.params.name,
+                req.body.is_enabled,
+                req.user
+            );
+
+        return ApiResponse.success(
+            res,
+            `Service ${result.is_enabled ? "enabled" : "disabled"} successfully.`,
+            result
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
