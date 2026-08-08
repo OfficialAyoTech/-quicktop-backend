@@ -189,4 +189,21 @@ router.post(
     reverseTransaction
 );
 
+/**
+ * Service Management
+ */
+router.get(
+    "/services",
+    auth,
+    admin,
+    adminController.getServiceStatuses
+);
+
+router.patch(
+    "/services/:name/toggle",
+    auth,
+    admin,
+    adminController.toggleService
+);
+
 module.exports = router;

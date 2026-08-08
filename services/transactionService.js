@@ -28,6 +28,7 @@ const CABLE_PACKAGES = require("../utils/cablePackages");
 const NotificationService = require("./notificationService");
 const notificationTemplates = require("../utils/notificationTemplates");
 const PinService = require("./pinService");
+const ServiceStatusService = require("./serviceStatusService");
 
 const {
     SERVICES,
@@ -56,6 +57,8 @@ const {
 } = payload;
 
 console.log("PIN RECEIVED:", pin);
+
+await ServiceStatusService.assertEnabled(SERVICES.AIRTIME);
 
 await PinService.verifyPin(
     userId,
@@ -249,6 +252,8 @@ static async purchaseData(userId, payload) {
     amount,
     pin
 } = payload;
+
+await ServiceStatusService.assertEnabled(SERVICES.DATA);
 
 await PinService.verifyPin(
     userId,
@@ -506,6 +511,8 @@ static async purchaseElectricity(userId, payload) {
         pin
     } = payload;
 
+    await ServiceStatusService.assertEnabled(SERVICES.ELECTRICITY);
+
     await PinService.verifyPin(userId, pin);
 
     const companyCode =
@@ -704,6 +711,8 @@ static async purchaseCable(userId, payload) {
         phone,
         pin
     } = payload;
+
+    await ServiceStatusService.assertEnabled(SERVICES.CABLE_TV);
 
     await PinService.verifyPin(userId, pin);
 

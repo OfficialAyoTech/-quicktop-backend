@@ -1,5 +1,6 @@
 const AdminService = require("../services/adminService");
 const ApiResponse = require("../helpers/apiResponse");
+const ServiceStatusService = require("../services/serviceStatusService");
 
 /**
  * Admin Dashboard
@@ -517,5 +518,7 @@ module.exports = {
     debitWallet,
     getTransactions,
     getTransaction,
-    reverseTransaction
+    reverseTransaction,
+    getServiceStatuses,
+    toggleService
 };
