@@ -102,7 +102,8 @@ const approveKyc = async (req, res) => {
 
         const result =
             await AdminService.approveKyc(
-                req.params.id
+                req.params.id,
+                req.user
             );
 
         return ApiResponse.success(
@@ -134,7 +135,8 @@ const rejectKyc = async (req, res) => {
         const result =
             await AdminService.rejectKyc(
                 req.params.id,
-                req.body.reason
+                req.body.reason,
+                req.user
             );
 
         return ApiResponse.success(
@@ -281,7 +283,8 @@ const suspendUser = async (req, res) => {
 
         const result =
             await AdminService.suspendUser(
-                req.params.id
+                req.params.id,
+                req.user
             );
 
         return ApiResponse.success(
@@ -310,7 +313,8 @@ const activateUser = async (req, res) => {
 
         const result =
             await AdminService.activateUser(
-                req.params.id
+                req.params.id,
+                req.user
             );
 
         return ApiResponse.success(
@@ -339,10 +343,11 @@ const creditWallet = async (req, res) => {
 
         const result =
             await AdminService.creditWallet(
-    req.params.userId,
-    req.body.amount,
-    req.body.reason
-);
+                req.params.userId,
+                req.body.amount,
+                req.body.reason,
+                req.user
+            );
 
         return ApiResponse.success(
             res,
@@ -375,7 +380,9 @@ const debitWallet = async (req, res) => {
 
                 req.body.amount,
 
-                req.body.reason
+                req.body.reason,
+
+                req.user
 
             );
 
@@ -472,7 +479,8 @@ const reverseTransaction = async (req, res) => {
 
         const result =
             await AdminService.reverseTransaction(
-                req.params.reference
+                req.params.reference,
+                req.user
             );
 
         return ApiResponse.success(
