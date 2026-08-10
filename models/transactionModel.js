@@ -267,6 +267,25 @@ static async changeStatus(reference, status, client = pool) {
 
 }
 
+/**
+ * Count successful transactions for a user
+ */
+static async countSuccessfulTransactions(userId, client = pool) {
+
+    const result = await client.query(
+        `
+        SELECT COUNT(*) total
+        FROM transactions
+        WHERE user_id = $1
+        AND status = 'successful'
+        `,
+        [userId]
+    );
+
+    return Number(result.rows[0].total);
+
+}
+
 }
 
 module.exports = TransactionModel;

@@ -14,6 +14,7 @@ const validateCable =
 
 router.post(
     "/verify",
+    authenticateUser,
     verifyCable
 );
 

@@ -3,8 +3,6 @@ const UserModel = require("../models/userModel");
 
 const authenticateUser = async (req, res, next) => {
 
-    console.log("🔥 authenticateUser middleware reached");
-
     try {
 
         const authHeader = req.headers.authorization;
@@ -20,9 +18,6 @@ const authenticateUser = async (req, res, next) => {
 
         // Verify Firebase token
 const decodedToken = await auth.verifyIdToken(idToken);
-
-console.log("========== FIREBASE TOKEN ==========");
-console.log(decodedToken);
 
 const dbUser = await UserModel.findByFirebaseUid(decodedToken.uid);
 
@@ -47,9 +42,6 @@ if (dbUser.account_status !== "ACTIVE") {
     });
 }
 
-console.log("========== POSTGRES USER ==========");
-console.log(dbUser);
-
 req.user = {
     uid: decodedToken.uid,
     id: dbUser.id,
@@ -70,13 +62,7 @@ req.user = {
     account_status: dbUser.account_status
 };
 
-console.log("========== REQ.USER ==========");
-console.log(req.user);
-
-console.log("========== AUTH USER ==========");
-console.log(req.user);
-
-        next();
+next();
 
     } catch (error) {
 
