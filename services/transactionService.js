@@ -29,6 +29,7 @@ const NotificationService = require("./notificationService");
 const notificationTemplates = require("../utils/notificationTemplates");
 const PinService = require("./pinService");
 const ServiceStatusService = require("./serviceStatusService");
+const { buyWaec } = require("./vtpassService");
 
 const {
     SERVICES,
