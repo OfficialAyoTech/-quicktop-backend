@@ -27,10 +27,6 @@ class WebhookService {
 
 const event = JSON.parse(req.body);
 
-        console.log("✅ Paystack webhook signature verified.");
-
-        const event = req.body;
-
         // Only process successful payments
         if (event.event !== "charge.success") {
             console.log(`Ignoring event: ${event.event}`);
