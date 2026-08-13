@@ -76,6 +76,10 @@ app.use(cors({
     credentials: true
 }));
 
+// Paystack webhook needs the raw body for signature verification —
+// must be registered before express.json() and scoped to this exact path only
+app.use("/api/payments/webhook", express.raw({ type: "application/json" }));
+
 app.use(express.json());
 
 const limiter = rateLimit({

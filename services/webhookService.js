@@ -15,16 +15,17 @@ class WebhookService {
         }
 
         const hash = crypto
-            .createHmac(
-                "sha512",
-                process.env.PAYSTACK_SECRET_KEY
-            )
-            .update(JSON.stringify(req.body))
-            .digest("hex");
+    .createHmac("sha512", process.env.PAYSTACK_SECRET_KEY)
+    .update(req.body) // req.body is now a raw Buffer, not a parsed object
+    .digest("hex");
 
         if (hash !== signature) {
             throw new Error("Invalid Paystack signature.");
         }
+
+        console.log("✅ Paystack webhook signature verified.");
+
+const event = JSON.parse(req.body);
 
         console.log("✅ Paystack webhook signature verified.");
 
