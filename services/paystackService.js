@@ -2,8 +2,6 @@ const axios = require("axios");
 
 const BASE_URL = process.env.PAYSTACK_BASE_URL;
 const SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-console.log("PAYSTACK_BASE_URL:", process.env.PAYSTACK_BASE_URL);
-console.log("PAYSTACK_SECRET_KEY:", process.env.PAYSTACK_SECRET_KEY?.substring(0, 12));
 
 const api = axios.create({
     baseURL: BASE_URL,
