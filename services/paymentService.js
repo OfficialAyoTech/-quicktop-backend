@@ -140,15 +140,43 @@ class PaymentService {
             );
         }
 
-        const data = await this.processSuccessfulPayment(
-            user.id,
-            payment
-        );
+        try {
+
+    const data = await this.processSuccessfulPayment(
+        user.id,
+        payment
+    );
+
+    return {
+        message: "Wallet funded successfully.",
+        data
+    };
+
+} catch (error) {
+
+    if (error.message === "This payment has already been processed.") {
+
+        // Webhook already credited the wallet — this is a harmless
+        // second confirmation from the frontend, not a real failure.
+        const existing = await TransactionModel.findByReference(reference);
 
         return {
             message: "Wallet funded successfully.",
-            data
+            data: {
+                reference,
+                amount: Number(payment.amount) / 100,
+                wallet: {
+                    balance: Number(existing.balance_after),
+                    currency: "NGN"
+                }
+            }
         };
+
+    }
+
+    throw error;
+
+}
 
     }
 
