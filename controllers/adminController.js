@@ -1,6 +1,8 @@
 const AdminService = require("../services/adminService");
 const ApiResponse = require("../helpers/apiResponse");
 const ServiceStatusService = require("../services/serviceStatusService");
+const DataPlanSyncService = require("../services/dataPlanSyncService");
+const pool = require("../config/database");
 
 /**
  * Admin Dashboard
@@ -562,6 +564,112 @@ const toggleService = async (req, res) => {
 
 };
 
+/**
+ * Sync data plans from Clubkonnect
+ */
+const syncDataPlans = async (req, res) => {
+
+    try {
+
+        const result =
+            await DataPlanSyncService.syncFromClubkonnect();
+
+        return ApiResponse.success(
+            res,
+            `Sync complete: ${result.inserted} new plans added, ${result.updated} existing plans updated.`,
+            result
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Get all data plans with cost/sell/margin
+ */
+const getDataPlansAdmin = async (req, res) => {
+
+    try {
+
+        const result = await pool.query(
+            `SELECT id, network, plan_id, plan_code, plan_name,
+                    cost_price, sell_price,
+                    (sell_price - cost_price) AS margin,
+                    is_active
+             FROM data_plans
+             ORDER BY network, cost_price`
+        );
+
+        return ApiResponse.success(
+            res,
+            "Data plans retrieved successfully.",
+            result.rows
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Update a data plan's sell price
+ */
+const updateDataPlanPrice = async (req, res) => {
+
+    try {
+
+        const { id } = req.params;
+        const { sell_price } = req.body;
+
+        if (sell_price === undefined || Number(sell_price) < 0) {
+            throw new Error("A valid sell_price is required.");
+        }
+
+        const result = await pool.query(
+            `UPDATE data_plans
+             SET sell_price = $1, updated_at = now()
+             WHERE id = $2
+             RETURNING *`,
+            [sell_price, id]
+        );
+
+        if (result.rows.length === 0) {
+            throw new Error("Data plan not found.");
+        }
+
+        return ApiResponse.success(
+            res,
+            "Sell price updated successfully.",
+            result.rows[0]
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
@@ -580,5 +688,8 @@ module.exports = {
     getTransaction,
     reverseTransaction,
     getServiceStatuses,
-    toggleService
+    toggleService,
+    syncDataPlans,
+    getDataPlansAdmin,
+    updateDataPlanPrice
 };

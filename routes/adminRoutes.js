@@ -23,7 +23,10 @@ const {
     debitWallet,
     getTransactions,
     getTransaction,
-    reverseTransaction
+    reverseTransaction,
+    syncDataPlans,
+    getDataPlansAdmin,
+    updateDataPlanPrice
 } = require("../controllers/adminController");
 
 /**
@@ -204,6 +207,30 @@ router.patch(
     auth,
     admin,
     adminController.toggleService
+);
+
+/**
+ * Data Plans Management
+ */
+router.post(
+    "/data-plans/sync",
+    auth,
+    admin,
+    adminController.syncDataPlans
+);
+
+router.get(
+    "/data-plans",
+    auth,
+    admin,
+    adminController.getDataPlansAdmin
+);
+
+router.patch(
+    "/data-plans/:id/price",
+    auth,
+    admin,
+    adminController.updateDataPlanPrice
 );
 
 module.exports = router;
