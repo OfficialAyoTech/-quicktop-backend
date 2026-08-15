@@ -1,5 +1,6 @@
 const TransactionService = require("../services/transactionService");
 const ApiResponse = require("../helpers/apiResponse");
+const pool = require("../config/database");
 
 const verifyCable = async (req, res) => {
 
@@ -121,5 +122,6 @@ const getCablePlans = async (req, res) => {
 
 module.exports = {
     verifyCable,
-    purchaseCable
+    purchaseCable,
+    getCablePlans
 };

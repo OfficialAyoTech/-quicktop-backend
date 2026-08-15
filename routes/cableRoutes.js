@@ -6,7 +6,8 @@ const authenticateUser = require("../middleware/auth");
 
 const {
     verifyCable,
-    purchaseCable
+    purchaseCable,
+    getCablePlans
 } = require("../controllers/cableController");
 
 const validateCable =
