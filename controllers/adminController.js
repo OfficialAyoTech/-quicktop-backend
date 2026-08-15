@@ -670,6 +670,84 @@ const updateDataPlanPrice = async (req, res) => {
 
 };
 
+/**
+ * Get all cable packages with cost/sell/margin
+ */
+const getCablePackagesAdmin = async (req, res) => {
+
+    try {
+
+        const result = await pool.query(
+            `SELECT id, provider, package_name, package_code,
+                    cost_price, sell_price,
+                    (sell_price - cost_price) AS margin,
+                    is_active
+             FROM cable_packages
+             ORDER BY provider, cost_price`
+        );
+
+        return ApiResponse.success(
+            res,
+            "Cable packages retrieved successfully.",
+            result.rows
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Update a cable package's sell price
+ */
+const updateCablePackagePrice = async (req, res) => {
+
+    try {
+
+        const { id } = req.params;
+        const { sell_price } = req.body;
+
+        if (sell_price === undefined || Number(sell_price) < 0) {
+            throw new Error("A valid sell_price is required.");
+        }
+
+        const result = await pool.query(
+            `UPDATE cable_packages
+             SET sell_price = $1, updated_at = now()
+             WHERE id = $2
+             RETURNING *`,
+            [sell_price, id]
+        );
+
+        if (result.rows.length === 0) {
+            throw new Error("Cable package not found.");
+        }
+
+        return ApiResponse.success(
+            res,
+            "Sell price updated successfully.",
+            result.rows[0]
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
@@ -691,5 +769,7 @@ module.exports = {
     toggleService,
     syncDataPlans,
     getDataPlansAdmin,
-    updateDataPlanPrice
+    updateDataPlanPrice,
+    getCablePackagesAdmin,
+    updateCablePackagePrice
 };

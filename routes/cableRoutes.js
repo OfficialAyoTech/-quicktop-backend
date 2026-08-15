@@ -25,4 +25,10 @@ router.post(
     purchaseCable
 );
 
+router.get(
+    "/plans/:provider",
+    authenticateUser,
+    getCablePlans
+);
+
 module.exports = router;

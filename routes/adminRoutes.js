@@ -233,4 +233,21 @@ router.patch(
     adminController.updateDataPlanPrice
 );
 
+/**
+ * Cable Packages Management
+ */
+router.get(
+    "/cable-packages",
+    auth,
+    admin,
+    adminController.getCablePackagesAdmin
+);
+
+router.patch(
+    "/cable-packages/:id/price",
+    auth,
+    admin,
+    adminController.updateCablePackagePrice
+);
+
 module.exports = router;

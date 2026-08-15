@@ -725,7 +725,6 @@ static async purchaseCable(userId, payload) {
         cableTv,
         package: cablePackage,
         smartCardNo,
-        amount,
         phone,
         pin
     } = payload;
@@ -753,6 +752,23 @@ static async purchaseCable(userId, payload) {
             "Invalid cable package."
         );
     }
+
+    // SECURITY: never trust a client-supplied price. Look up the real
+    // sell price server-side using the package code Clubkonnect expects.
+    const packageResult = await pool.query(
+        `SELECT package_code, sell_price, is_active
+         FROM cable_packages
+         WHERE package_code = $1`,
+        [packageCode]
+    );
+
+    const packageRow = packageResult.rows[0];
+
+    if (!packageRow || !packageRow.is_active) {
+        throw new BadRequestError("Invalid or unavailable cable package.");
+    }
+
+    const amount = Number(packageRow.sell_price);
 
     const reference = generateReference();
 

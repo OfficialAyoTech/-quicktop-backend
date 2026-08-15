@@ -87,6 +87,38 @@ const result =
 
 };
 
+const getCablePlans = async (req, res) => {
+
+    try {
+
+        const { provider } = req.params;
+
+        const result = await pool.query(
+            `SELECT package_name, package_code, sell_price
+             FROM cable_packages
+             WHERE provider = $1 AND is_active = true
+             ORDER BY sell_price`,
+            [provider.toUpperCase()]
+        );
+
+        return ApiResponse.success(
+            res,
+            "Cable plans retrieved successfully.",
+            result.rows
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
 module.exports = {
     verifyCable,
     purchaseCable
