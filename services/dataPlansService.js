@@ -1,42 +1,34 @@
-const { getDataPlans } = require("./clubkonnectService");
+const pool = require("../config/database");
 
 class DataPlansService {
 
     static async getPlans(network = null) {
 
-        const response = await getDataPlans();
+        let query = `
+            SELECT plan_id AS "planId",
+                   network,
+                   plan_name AS name,
+                   sell_price AS amount,
+                   plan_code AS code
+            FROM data_plans
+            WHERE is_active = true
+        `;
 
-        const networks = response.MOBILE_NETWORK;
-
-        let plans = [];
-
-        for (const networkName in networks) {
-
-            const products = networks[networkName][0].PRODUCT;
-
-            products.forEach(product => {
-
-                plans.push({
-                    network: networkName.toUpperCase(),
-                    planId: product.PRODUCT_ID,
-                    name: product.PRODUCT_NAME,
-                    amount: Number(product.PRODUCT_AMOUNT),
-                    code: product.PRODUCT_CODE
-                });
-
-            });
-
-        }
+        const values = [];
 
         if (network) {
-
-            plans = plans.filter(
-                p => p.network.toUpperCase() === network.toUpperCase()
-            );
-
+            query += ` AND network = $1`;
+            values.push(network.toUpperCase());
         }
 
-        return plans;
+        query += ` ORDER BY network, sell_price`;
+
+        const result = await pool.query(query, values);
+
+        return result.rows.map(row => ({
+            ...row,
+            amount: Number(row.amount)
+        }));
 
     }
 

@@ -1,4 +1,5 @@
 const TransactionModel = require("../models/transactionModel");
+const pool = require("../config/database");
 const {
     buyAirtime,
     buyData,
@@ -247,25 +248,41 @@ return {
 static async purchaseData(userId, payload) {
 
     const {
-    network,
-    phone,
-    plan,
-    amount,
-    pin
-} = payload;
+        network,
+        phone,
+        plan,
+        pin
+    } = payload;
 
-await ServiceStatusService.assertEnabled(SERVICES.DATA);
+    await ServiceStatusService.assertEnabled(SERVICES.DATA);
 
-await PinService.verifyPin(
-    userId,
-    pin
-);
+    await PinService.verifyPin(
+        userId,
+        pin
+    );
 
     const networkCode = NETWORKS[network.toUpperCase()];
 
     if (!networkCode) {
         throw new BadRequestError("Invalid network.");
     }
+
+    // SECURITY: never trust a client-supplied price. Look up the real
+    // sell price server-side using the plan code the client sent.
+    const planResult = await pool.query(
+        `SELECT plan_id, plan_code, sell_price, is_active
+         FROM data_plans
+         WHERE network = $1 AND plan_code = $2`,
+        [network.toUpperCase(), plan]
+    );
+
+    const planRow = planResult.rows[0];
+
+    if (!planRow || !planRow.is_active) {
+        throw new BadRequestError("Invalid or unavailable data plan.");
+    }
+
+    const amount = Number(planRow.sell_price);
 
     const reference = generateReference();
 
