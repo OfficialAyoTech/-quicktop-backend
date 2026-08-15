@@ -221,7 +221,7 @@ static async getPendingTransactions(client = pool) {
     const result = await client.query(`
         SELECT *
         FROM transactions
-        WHERE status = 'PENDING'
+        WHERE status = 'pending'
         ORDER BY created_at ASC
     `);
 
