@@ -748,6 +748,84 @@ const updateCablePackagePrice = async (req, res) => {
 
 };
 
+/**
+ * Get WAEC packages with cost/sell/margin
+ */
+const getWaecPackagesAdmin = async (req, res) => {
+
+    try {
+
+        const result = await pool.query(
+            `SELECT id, name, variation_code,
+                    cost_price, sell_price,
+                    (sell_price - cost_price) AS margin,
+                    is_active
+             FROM waec_packages
+             ORDER BY id`
+        );
+
+        return ApiResponse.success(
+            res,
+            "WAEC packages retrieved successfully.",
+            result.rows
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Update a WAEC package's sell price
+ */
+const updateWaecPackagePrice = async (req, res) => {
+
+    try {
+
+        const { id } = req.params;
+        const { sell_price } = req.body;
+
+        if (sell_price === undefined || Number(sell_price) < 0) {
+            throw new Error("A valid sell_price is required.");
+        }
+
+        const result = await pool.query(
+            `UPDATE waec_packages
+             SET sell_price = $1, updated_at = now()
+             WHERE id = $2
+             RETURNING *`,
+            [sell_price, id]
+        );
+
+        if (result.rows.length === 0) {
+            throw new Error("WAEC package not found.");
+        }
+
+        return ApiResponse.success(
+            res,
+            "Sell price updated successfully.",
+            result.rows[0]
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
@@ -771,5 +849,7 @@ module.exports = {
     getDataPlansAdmin,
     updateDataPlanPrice,
     getCablePackagesAdmin,
-    updateCablePackagePrice
+    updateCablePackagePrice,
+    getWaecPackagesAdmin,
+    updateWaecPackagePrice
 };

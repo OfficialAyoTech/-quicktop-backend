@@ -939,6 +939,214 @@ await NotificationService.notify({
     });
 
 }
+/**
+ * Purchase WAEC Result Checker PIN
+ */
+static async purchaseWaec(userId, payload) {
+
+    const {
+        phone,
+        pin
+    } = payload;
+
+    await ServiceStatusService.assertEnabled(SERVICES.WAEC);
+
+    await PinService.verifyPin(userId, pin);
+
+    // SECURITY: never trust a client-supplied price. There's only ever
+    // one active WAEC product right now, so just pull the current row.
+    const packageResult = await pool.query(
+        `SELECT variation_code, sell_price, is_active
+         FROM waec_packages
+         WHERE is_active = true
+         ORDER BY id
+         LIMIT 1`
+    );
+
+    const packageRow = packageResult.rows[0];
+
+    if (!packageRow) {
+        throw new BadRequestError(
+            "WAEC Result Checker PIN is currently unavailable."
+        );
+    }
+
+    const amount = Number(packageRow.sell_price);
+
+    const reference = generateReference();
+
+    return await DatabaseTransaction.run(async (client) => {
+
+        // Debit wallet
+        const updatedWallet =
+            await WalletService.debitWithClient(
+                userId,
+                {
+                    amount,
+                    source: PAYMENT_SOURCES.WALLET,
+                    service: SERVICES.WAEC,
+                    reference,
+                    description: `WAEC Result Checker PIN for ${phone}`
+                },
+                client
+            );
+
+        // Save transaction
+        await TransactionModel.create(
+            {
+                user_id: userId,
+                reference,
+                provider: "VTpass",
+                service: SERVICES.WAEC,
+                phone,
+                amount,
+                status: TRANSACTION_STATUS.PENDING,
+                balance_after: updatedWallet.balance,
+                api_response: {}
+            },
+            client
+        );
+
+        try {
+
+            const response = await buyWaec({
+                requestId: reference,
+                phone,
+                variationCode: packageRow.variation_code,
+                quantity: 1
+            });
+
+            // VTpass's /api/pay for WAEC is synchronous — code "000" plus
+            // content.transactions.status tells us the real outcome
+            // immediately. There is no shared background requery wired
+            // up for VTpass (TransactionStatusService.check only knows
+            // how to query ClubKonnect), so success/failure is resolved
+            // directly from this response instead of routing through it.
+            const txStatus = response?.content?.transactions?.status;
+            const delivered = response?.code === "000" && txStatus === "delivered";
+            const pending = response?.code === "000" && txStatus === "pending";
+
+            if (!delivered && !pending) {
+
+                await WalletService.creditWithClient(
+                    userId,
+                    {
+                        amount,
+                        source: PAYMENT_SOURCES.REFUND,
+                        service: SERVICES.WAEC,
+                        reference: `${reference}-REFUND`,
+                        description: "Refund for failed WAEC purchase"
+                    },
+                    client
+                );
+
+                await TransactionModel.updateStatus(
+                    reference,
+                    TRANSACTION_STATUS.FAILED,
+                    response,
+                    client
+                );
+
+                const notification =
+                    notificationTemplates[SERVICES.WAEC].FAILED({
+                        amount
+                    });
+
+                await NotificationService.notify({
+                    user_id: userId,
+                    title: notification.title,
+                    message: notification.message,
+                    type: "FAILED",
+                    category: "purchase",
+                    metadata: {
+                        reference,
+                        amount,
+                        service: SERVICES.WAEC
+                    }
+                });
+
+                return {
+                    success: false,
+                    reference,
+                    message: "WAEC Result Checker PIN purchase failed."
+                };
+
+            }
+
+            await TransactionModel.updateStatus(
+                reference,
+                delivered ? TRANSACTION_STATUS.SUCCESS : TRANSACTION_STATUS.PENDING,
+                response,
+                client
+            );
+
+            if (delivered) {
+
+                const notification =
+                    notificationTemplates[SERVICES.WAEC].SUCCESS({
+                        amount
+                    });
+
+                await NotificationService.notify({
+                    user_id: userId,
+                    title: notification.title,
+                    message: notification.message,
+                    type: "SUCCESS",
+                    category: "purchase",
+                    metadata: {
+                        reference,
+                        amount,
+                        service: SERVICES.WAEC
+                    }
+                });
+
+            }
+
+            const card = response?.cards?.[0];
+
+            return {
+                success: true,
+                message: delivered
+                    ? "WAEC Result Checker PIN purchased successfully."
+                    : "WAEC Result Checker PIN purchase is being processed.",
+                reference,
+                pin: card ? { serial: card.Serial, pin: card.Pin } : null,
+                wallet: {
+                    balance: updatedWallet.balance
+                }
+            };
+
+        } catch (error) {
+
+            await WalletService.creditWithClient(
+                userId,
+                {
+                    amount,
+                    source: PAYMENT_SOURCES.REFUND,
+                    service: SERVICES.WAEC,
+                    reference: `${reference}-REFUND`,
+                    description: "Refund for failed WAEC purchase"
+                },
+                client
+            );
+
+            await TransactionModel.updateStatus(
+                reference,
+                TRANSACTION_STATUS.FAILED,
+                {
+                    error: error.response?.data || error.message
+                },
+                client
+            );
+
+            throw error;
+
+        }
+
+    });
+
+}
+
     /**
  * Record Wallet Funding Transaction
  */

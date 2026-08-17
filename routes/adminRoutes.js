@@ -250,4 +250,21 @@ router.patch(
     adminController.updateCablePackagePrice
 );
 
+/**
+ * WAEC Packages Management
+ */
+router.get(
+    "/waec-packages",
+    auth,
+    admin,
+    adminController.getWaecPackagesAdmin
+);
+
+router.patch(
+    "/waec-packages/:id/price",
+    auth,
+    admin,
+    adminController.updateWaecPackagePrice
+);
+
 module.exports = router;

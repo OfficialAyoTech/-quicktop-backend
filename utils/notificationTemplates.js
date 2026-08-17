@@ -65,6 +65,20 @@ const notificationTemplates = {
             message: `Your cable subscription failed. ₦${amount} has been refunded to your wallet.`
         })
 
+    },
+
+    [SERVICES.WAEC]: {
+
+        SUCCESS: () => ({
+            title: "🎓 WAEC PIN Purchase Successful",
+            message: "Your WAEC Result Checker PIN has been generated successfully."
+        }),
+
+        FAILED: ({ amount }) => ({
+            title: "❌ WAEC PIN Purchase Failed",
+            message: `Your WAEC PIN purchase failed. ₦${amount} has been refunded to your wallet.`
+        })
+
     }
 
 };
