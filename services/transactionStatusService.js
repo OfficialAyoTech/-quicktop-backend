@@ -4,6 +4,7 @@ const NotificationService = require("./notificationService");
 const notificationTemplates = require("../utils/notificationTemplates");
 const ReferralModel = require("../models/referralModel");
 const UserModel = require("../models/userModel");
+const pool = require("../config/database");
 
 const {
     queryTransaction
@@ -96,7 +97,12 @@ class TransactionStatusService {
             // purchase — not on funding alone. Requiring the purchase to
             // be >= the reward amount prevents someone farming referrals
             // with a token 20-naira purchase for a 500-naira payout.
-            await this.maybeCompleteReferral(userId, transaction, reference);
+                const referralAwarded =
+                await this.maybeCompleteReferral(userId, transaction, reference);
+
+            if (!referralAwarded) {
+                await this.maybeAwardCashback(userId, transaction, reference);
+            }
 
         }
 
@@ -147,24 +153,24 @@ class TransactionStatusService {
      * Complete a pending referral if this user just completed their
      * first successful purchase of at least MIN_REFERRAL_QUALIFYING_AMOUNT.
      */
-    static async maybeCompleteReferral(userId, transaction, reference) {
+        static async maybeCompleteReferral(userId, transaction, reference) {
 
         if (Number(transaction.amount) < MIN_REFERRAL_QUALIFYING_AMOUNT) {
-            return;
+            return false;
         }
 
         const successfulCount =
             await TransactionModel.countSuccessfulTransactions(userId);
 
         if (successfulCount !== 1) {
-            return;
+            return false;
         }
 
         const referral =
             await ReferralModel.findPendingByUser(userId);
 
         if (!referral) {
-            return;
+            return false;
         }
 
         const reward = 500;
@@ -199,6 +205,91 @@ class TransactionStatusService {
             metadata: {
                 reward,
                 reference
+            }
+        });
+
+        return true;
+
+    }
+
+        /**
+     * Award cashback into the user's separate rewards balance, based on a
+     * percentage of this specific purchase's margin (never the sale price —
+     * margin-based cashback can mathematically never exceed what was made
+     * on the sale). transaction.margin is NULL for services that don't
+     * track margin (airtime, electricity) and for promotional plans, so
+     * both cases are automatically skipped by the check below.
+     */
+    static async maybeAwardCashback(userId, transaction, reference) {
+
+        if (transaction.margin === null || transaction.margin === undefined) {
+            return;
+        }
+
+        const margin = Number(transaction.margin);
+
+        if (margin <= 0) {
+            return;
+        }
+
+        const rateResult = await pool.query(
+            `SELECT rate_percent, min_purchase_amount, is_enabled
+             FROM cashback_rates
+             WHERE service_name = $1`,
+            [transaction.service]
+        );
+
+        const rateRow = rateResult.rows[0];
+
+        if (!rateRow || !rateRow.is_enabled) {
+            return;
+        }
+
+        if (Number(transaction.amount) < Number(rateRow.min_purchase_amount)) {
+            return;
+        }
+
+        const cashbackAmount = Number(
+            (margin * Number(rateRow.rate_percent) / 100).toFixed(2)
+        );
+
+        if (cashbackAmount <= 0) {
+            return;
+        }
+
+        await pool.query(
+            `INSERT INTO rewards_balances (user_id, balance, updated_at)
+             VALUES ($1, $2, now())
+             ON CONFLICT (user_id)
+             DO UPDATE SET balance = rewards_balances.balance + $2, updated_at = now()`,
+            [userId, cashbackAmount]
+        );
+
+        await pool.query(
+            `INSERT INTO cashback_transactions
+             (user_id, source_reference, service, purchase_amount, margin, rate_percent, cashback_amount)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+            [
+                userId,
+                reference,
+                transaction.service,
+                transaction.amount,
+                margin,
+                rateRow.rate_percent,
+                cashbackAmount
+            ]
+        );
+
+        await NotificationService.notify({
+            user_id: userId,
+            title: "🎉 Cashback Earned",
+            message: `You earned ₦${cashbackAmount} cashback on your last purchase.`,
+            type: "SUCCESS",
+            category: "promotion",
+            metadata: {
+                reference,
+                cashbackAmount,
+                service: transaction.service
             }
         });
 

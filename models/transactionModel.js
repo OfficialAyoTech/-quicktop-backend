@@ -8,20 +8,21 @@ class TransactionModel {
 static async create(transaction, client = pool) {
 
     const {
-    user_id,
-    recipient_user_id = null,
-    reference,
-    provider,
-    service,
-    phone = null,
-    amount,
-    status,
-    transaction_type = "PURCHASE",
-    narration = null,
-    network = null,
-    balance_after = null,
-    api_response = {}
-} = transaction;
+        user_id,
+        recipient_user_id = null,
+        reference,
+        provider,
+        service,
+        phone = null,
+        amount,
+        status,
+        transaction_type = "PURCHASE",
+        narration = null,
+        network = null,
+        balance_after = null,
+        api_response = {},
+        margin = null
+    } = transaction;
 
     const query = `
         INSERT INTO transactions
@@ -38,11 +39,12 @@ static async create(transaction, client = pool) {
             narration,
             network,
             balance_after,
-            api_response
+            api_response,
+            margin
         )
         VALUES
         (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
         )
         RETURNING *;
     `;
@@ -60,7 +62,8 @@ static async create(transaction, client = pool) {
         narration,
         network,
         balance_after,
-        api_response
+        api_response,
+        margin
     ];
 
     const result = await client.query(query, values);

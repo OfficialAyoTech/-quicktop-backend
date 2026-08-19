@@ -599,14 +599,15 @@ const getDataPlansAdmin = async (req, res) => {
 
     try {
 
-        const result = await pool.query(
-            `SELECT id, network, plan_id, plan_code, plan_name,
-                    cost_price, sell_price,
-                    (sell_price - cost_price) AS margin,
-                    is_active
-             FROM data_plans
-             ORDER BY network, cost_price`
-        );
+        // getDataPlansAdmin — add is_promotional to the column list
+const result = await pool.query(
+    `SELECT id, network, plan_id, plan_code, plan_name,
+            cost_price, sell_price,
+            (sell_price - cost_price) AS margin,
+            is_active, is_promotional
+     FROM data_plans
+     ORDER BY network, cost_price`
+);
 
         return ApiResponse.success(
             res,
@@ -677,14 +678,15 @@ const getCablePackagesAdmin = async (req, res) => {
 
     try {
 
-        const result = await pool.query(
-            `SELECT id, provider, package_name, package_code,
-                    cost_price, sell_price,
-                    (sell_price - cost_price) AS margin,
-                    is_active
-             FROM cable_packages
-             ORDER BY provider, cost_price`
-        );
+        // getCablePackagesAdmin — same addition
+const result = await pool.query(
+    `SELECT id, provider, package_name, package_code,
+            cost_price, sell_price,
+            (sell_price - cost_price) AS margin,
+            is_active, is_promotional
+     FROM cable_packages
+     ORDER BY provider, cost_price`
+);
 
         return ApiResponse.success(
             res,
@@ -733,6 +735,166 @@ const updateCablePackagePrice = async (req, res) => {
         return ApiResponse.success(
             res,
             "Sell price updated successfully.",
+            result.rows[0]
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Get all cashback rates
+ */
+const getCashbackRates = async (req, res) => {
+
+    try {
+
+        const result = await pool.query(
+            `SELECT service_name, rate_percent, min_purchase_amount, is_enabled, updated_at
+             FROM cashback_rates
+             ORDER BY service_name`
+        );
+
+        return ApiResponse.success(
+            res,
+            "Cashback rates retrieved successfully.",
+            result.rows
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Update a cashback rate
+ */
+const updateCashbackRate = async (req, res) => {
+
+    try {
+
+        const { service } = req.params;
+        const { rate_percent, min_purchase_amount, is_enabled } = req.body;
+
+        if (rate_percent === undefined || Number(rate_percent) < 0 || Number(rate_percent) > 100) {
+            throw new Error("A valid rate_percent between 0 and 100 is required.");
+        }
+
+        if (min_purchase_amount === undefined || Number(min_purchase_amount) < 0) {
+            throw new Error("A valid min_purchase_amount is required.");
+        }
+
+        const result = await pool.query(
+            `UPDATE cashback_rates
+             SET rate_percent = $1, min_purchase_amount = $2, is_enabled = $3,
+                 updated_by = $4, updated_at = now()
+             WHERE service_name = $5
+             RETURNING *`,
+            [rate_percent, min_purchase_amount, is_enabled !== false, req.user.email, service]
+        );
+
+        if (result.rows.length === 0) {
+            throw new Error("Cashback rate not found for this service.");
+        }
+
+        return ApiResponse.success(
+            res,
+            "Cashback rate updated successfully.",
+            result.rows[0]
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Toggle a data plan's promotional flag
+ */
+const updateDataPlanPromo = async (req, res) => {
+
+    try {
+
+        const { id } = req.params;
+        const { is_promotional } = req.body;
+
+        const result = await pool.query(
+            `UPDATE data_plans
+             SET is_promotional = $1, updated_at = now()
+             WHERE id = $2
+             RETURNING *`,
+            [Boolean(is_promotional), id]
+        );
+
+        if (result.rows.length === 0) {
+            throw new Error("Data plan not found.");
+        }
+
+        return ApiResponse.success(
+            res,
+            "Promotional flag updated successfully.",
+            result.rows[0]
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Toggle a cable package's promotional flag
+ */
+const updateCablePackagePromo = async (req, res) => {
+
+    try {
+
+        const { id } = req.params;
+        const { is_promotional } = req.body;
+
+        const result = await pool.query(
+            `UPDATE cable_packages
+             SET is_promotional = $1, updated_at = now()
+             WHERE id = $2
+             RETURNING *`,
+            [Boolean(is_promotional), id]
+        );
+
+        if (result.rows.length === 0) {
+            throw new Error("Cable package not found.");
+        }
+
+        return ApiResponse.success(
+            res,
+            "Promotional flag updated successfully.",
             result.rows[0]
         );
 
@@ -851,5 +1013,9 @@ module.exports = {
     getCablePackagesAdmin,
     updateCablePackagePrice,
     getWaecPackagesAdmin,
-    updateWaecPackagePrice
+    updateWaecPackagePrice,
+    getCashbackRates,
+    updateCashbackRate,
+    updateDataPlanPromo,
+    updateCablePackagePromo
 };

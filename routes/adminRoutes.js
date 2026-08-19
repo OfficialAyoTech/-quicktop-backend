@@ -251,6 +251,37 @@ router.patch(
 );
 
 /**
+ * Cashback Rates Management
+ */
+router.get(
+    "/cashback-rates",
+    auth,
+    admin,
+    adminController.getCashbackRates
+);
+
+router.patch(
+    "/cashback-rates/:service",
+    auth,
+    admin,
+    adminController.updateCashbackRate
+);
+
+router.patch(
+    "/data-plans/:id/promotional",
+    auth,
+    admin,
+    adminController.updateDataPlanPromo
+);
+
+router.patch(
+    "/cable-packages/:id/promotional",
+    auth,
+    admin,
+    adminController.updateCablePackagePromo
+);
+
+/**
  * WAEC Packages Management
  */
 router.get(

@@ -269,8 +269,8 @@ static async purchaseData(userId, payload) {
 
     // SECURITY: never trust a client-supplied price. Look up the real
     // sell price server-side using the plan code the client sent.
-    const planResult = await pool.query(
-        `SELECT plan_id, plan_code, sell_price, is_active
+        const planResult = await pool.query(
+        `SELECT plan_id, plan_code, cost_price, sell_price, is_active, is_promotional
          FROM data_plans
          WHERE network = $1 AND plan_code = $2`,
         [network.toUpperCase(), plan]
@@ -283,6 +283,9 @@ static async purchaseData(userId, payload) {
     }
 
     const amount = Number(planRow.sell_price);
+    const margin = planRow.is_promotional
+        ? null
+        : Number(planRow.sell_price) - Number(planRow.cost_price);
 
     const reference = generateReference();
 
@@ -302,7 +305,7 @@ static async purchaseData(userId, payload) {
         );
 
         // Save pending transaction
-        await TransactionModel.create(
+                await TransactionModel.create(
             {
                 user_id: userId,
                 reference,
@@ -313,7 +316,8 @@ static async purchaseData(userId, payload) {
                 status: TRANSACTION_STATUS.PENDING,
                 network,
                 balance_after: updatedWallet.balance,
-                api_response: {}
+                api_response: {},
+                margin
             },
             client
         );
@@ -755,8 +759,8 @@ static async purchaseCable(userId, payload) {
 
     // SECURITY: never trust a client-supplied price. Look up the real
     // sell price server-side using the package code Clubkonnect expects.
-    const packageResult = await pool.query(
-        `SELECT package_code, sell_price, is_active
+        const packageResult = await pool.query(
+        `SELECT package_code, cost_price, sell_price, is_active, is_promotional
          FROM cable_packages
          WHERE package_code = $1`,
         [packageCode]
@@ -769,6 +773,9 @@ static async purchaseCable(userId, payload) {
     }
 
     const amount = Number(packageRow.sell_price);
+    const margin = packageRow.is_promotional
+        ? null
+        : Number(packageRow.sell_price) - Number(packageRow.cost_price);
 
     const reference = generateReference();
 
