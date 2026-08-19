@@ -45,27 +45,22 @@ class TransactionService {
  */
 static async purchaseAirtime(userId, payload) {
 
-    console.log("🔥 TRANSACTION SERVICE CALLED");
-    console.log("🔥 NEW PURCHASE AIRTIME FUNCTION");
+    const {
+        network,
+        phone,
+        amount,
+        pin,
+        payment_source = "WALLET"
+    } = payload;
 
-    console.log("========== AIRTIME PAYLOAD ==========");
-console.log(payload);
+    const usingRewards = payment_source === "REWARDS";
 
-const {
-    network,
-    phone,
-    amount,
-    pin
-} = payload;
+    await ServiceStatusService.assertEnabled(SERVICES.AIRTIME);
 
-console.log("PIN RECEIVED:", pin);
-
-await ServiceStatusService.assertEnabled(SERVICES.AIRTIME);
-
-await PinService.verifyPin(
-    userId,
-    pin
-);
+    await PinService.verifyPin(
+        userId,
+        pin
+    );
 
     const networkCode = NETWORKS[network.toUpperCase()];
 
@@ -77,168 +72,178 @@ await PinService.verifyPin(
 
     return await DatabaseTransaction.run(async (client) => {
 
-    const updatedWallet = await WalletService.debitWithClient(
-        userId,
-        {
-            amount,
-            source: PAYMENT_SOURCES.WALLET,
-            service: SERVICES.AIRTIME,
-            reference,
-            description: `Airtime purchase for ${phone}`
-        },
-        client
-    );
+        const debitService = usingRewards ? RewardsService : WalletService;
+        const debitDescription = usingRewards
+            ? `Airtime purchase for ${phone} (paid with rewards)`
+            : `Airtime purchase for ${phone}`;
 
-    await TransactionModel.create(
-        {
-            user_id: userId,
-            reference,
-            provider: "ClubKonnect",
-            service: SERVICES.AIRTIME,
-            phone,
-            amount,
-            status: TRANSACTION_STATUS.PENDING,
-            network,
-            balance_after: updatedWallet.balance,
-            api_response: {}
-        },
-        client
-    );
+        const updatedBalance = await debitService.debitWithClient(
+            userId,
+            {
+                amount,
+                source: usingRewards ? "REWARDS" : PAYMENT_SOURCES.WALLET,
+                service: SERVICES.AIRTIME,
+                reference,
+                description: debitDescription
+            },
+            client
+        );
 
-    try {
+        await TransactionModel.create(
+            {
+                user_id: userId,
+                reference,
+                provider: "ClubKonnect",
+                service: SERVICES.AIRTIME,
+                phone,
+                amount,
+                status: TRANSACTION_STATUS.PENDING,
+                network,
+                balance_after: updatedBalance.balance,
+                api_response: {},
+                payment_source: usingRewards ? "REWARDS" : "WALLET"
+            },
+            client
+        );
 
-    
-             const response = await buyAirtime({
+        try {
+
+            const response = await buyAirtime({
                 network: networkCode,
                 amount,
                 phone,
                 requestId: reference
             });
 
-            console.log("========== AIRTIME PROVIDER RESPONSE ==========");
-console.log(response);
-
             if (response.status === "INSUFFICIENT_BALANCE") {
 
-    await WalletService.creditWithClient(
-        userId,
-        {
-            amount,
-            source: PAYMENT_SOURCES.REFUND,
-            service: SERVICES.AIRTIME,
-            reference: `${reference}-REFUND`,
-            description: "Refund for failed airtime purchase"
-        },
-        client
-    );
+                if (usingRewards) {
+                    await RewardsService.creditWithClient(userId, amount, client);
+                } else {
+                    await WalletService.creditWithClient(
+                        userId,
+                        {
+                            amount,
+                            source: PAYMENT_SOURCES.REFUND,
+                            service: SERVICES.AIRTIME,
+                            reference: `${reference}-REFUND`,
+                            description: "Refund for failed airtime purchase"
+                        },
+                        client
+                    );
+                }
 
-    await TransactionModel.updateStatus(
-        reference,
-        "FAILED",
-        response,
-        client
-    );
+                await TransactionModel.updateStatus(
+                    reference,
+                    "FAILED",
+                    response,
+                    client
+                );
 
-    const notification =
-    TransactionStatusService.getNotification(
-        {
-            service: SERVICES.AIRTIME,
-            amount,
-            phone,
-            network,
-            reference
-        },
-        "FAILED"
-    );
+                const notification =
+                    TransactionStatusService.getNotification(
+                        {
+                            service: SERVICES.AIRTIME,
+                            amount,
+                            phone,
+                            network,
+                            reference
+                        },
+                        "FAILED"
+                    );
 
-await NotificationService.notify({
-    user_id: userId,
-    title: notification.title,
-    message: notification.message,
-    type: "FAILED",
-    category: "purchase",
-    metadata: {
-        reference,
-        amount,
-        service: SERVICES.AIRTIME
-    }
-});
+                await NotificationService.notify({
+                    user_id: userId,
+                    title: notification.title,
+                    message: notification.message,
+                    type: "FAILED",
+                    category: "purchase",
+                    metadata: {
+                        reference,
+                        amount,
+                        service: SERVICES.AIRTIME
+                    }
+                });
 
-    return {
-        success: false,
-        reference,
-        message:
-            "Airtime service is temporarily unavailable. Please try again in a few minutes. If the issue persists, kindly contact support."
-    };
-}
+                return {
+                    success: false,
+                    reference,
+                    message:
+                        "Airtime service is temporarily unavailable. Please try again in a few minutes. If the issue persists, kindly contact support."
+                };
+            }
 
-           await TransactionModel.updateStatus(
-    reference,
-    TRANSACTION_STATUS.PENDING,
-    response,
-    client
-);
+            await TransactionModel.updateStatus(
+                reference,
+                TRANSACTION_STATUS.PENDING,
+                response,
+                client
+            );
 
-setImmediate(async () => {
-    try {
-        await TransactionStatusService.check(
-            reference,
-            userId,
-            amount
-        );
-    } catch (error) {
-        console.error("BACKGROUND CHECK FAILED:", error);
-    }
-});
+            setImmediate(async () => {
+                try {
+                    await TransactionStatusService.check(
+                        reference,
+                        userId,
+                        amount
+                    );
+                } catch (error) {
+                    console.error("BACKGROUND CHECK FAILED:", error);
+                }
+            });
 
-return {
-    success: true,
-    message: "Your transaction is being processed.",
-    reference,
-    wallet: {
-        balance: updatedWallet.balance
-    },
-    response: ProviderResponse.airtime(
-        {
-            network,
-            phone,
-            amount
-        },
-        response,
-        reference
-    )
-};
+            return {
+                success: true,
+                message: "Your transaction is being processed.",
+                reference,
+                wallet: {
+                    balance: updatedBalance.balance
+                },
+                response: ProviderResponse.airtime(
+                    {
+                        network,
+                        phone,
+                        amount
+                    },
+                    response,
+                    reference
+                )
+            };
 
         } catch (error) {
 
-    console.error(error);
+            console.error(error);
 
-    await WalletService.creditWithClient(
-        userId,
-        {
-            amount,
-            source: "REFUND",
-            service: "AIRTIME",
-            reference: `${reference}-REFUND`,
-            description: "Refund for failed airtime purchase"
-        },
-        client
-    );
+            if (usingRewards) {
+                await RewardsService.creditWithClient(userId, amount, client);
+            } else {
+                await WalletService.creditWithClient(
+                    userId,
+                    {
+                        amount,
+                        source: "REFUND",
+                        service: "AIRTIME",
+                        reference: `${reference}-REFUND`,
+                        description: "Refund for failed airtime purchase"
+                    },
+                    client
+                );
+            }
 
-    await TransactionModel.updateStatus(
-        reference,
-        "FAILED",
-        {
-            error: error.response?.data || error.message
-        },
-        client
-    );
+            await TransactionModel.updateStatus(
+                reference,
+                "FAILED",
+                {
+                    error: error.response?.data || error.message
+                },
+                client
+            );
 
-    throw error;
+            throw error;
 
-}
+        }
 
-});
+    });
 
 }
 
@@ -251,8 +256,11 @@ static async purchaseData(userId, payload) {
         network,
         phone,
         plan,
-        pin
+        pin,
+        payment_source = "WALLET"
     } = payload;
+
+    const usingRewards = payment_source === "REWARDS";
 
     await ServiceStatusService.assertEnabled(SERVICES.DATA);
 
@@ -267,9 +275,7 @@ static async purchaseData(userId, payload) {
         throw new BadRequestError("Invalid network.");
     }
 
-    // SECURITY: never trust a client-supplied price. Look up the real
-    // sell price server-side using the plan code the client sent.
-        const planResult = await pool.query(
+    const planResult = await pool.query(
         `SELECT plan_id, plan_code, cost_price, sell_price, is_active, is_promotional
          FROM data_plans
          WHERE network = $1 AND plan_code = $2`,
@@ -283,7 +289,11 @@ static async purchaseData(userId, payload) {
     }
 
     const amount = Number(planRow.sell_price);
-    const margin = planRow.is_promotional
+
+    // Rewards-funded purchases never earn cashback — this is the same
+    // margin=NULL signal used for promotional plans, and it's what stops
+    // rewards money from indirectly generating more rewards.
+    const margin = (planRow.is_promotional || usingRewards)
         ? null
         : Number(planRow.sell_price) - Number(planRow.cost_price);
 
@@ -291,21 +301,24 @@ static async purchaseData(userId, payload) {
 
     return await DatabaseTransaction.run(async (client) => {
 
-        // Debit wallet
-        const updatedWallet = await WalletService.debitWithClient(
+        const debitService = usingRewards ? RewardsService : WalletService;
+        const debitDescription = usingRewards
+            ? `Data purchase for ${phone} (paid with rewards)`
+            : `Data purchase for ${phone}`;
+
+        const updatedBalance = await debitService.debitWithClient(
             userId,
             {
                 amount,
-                source: PAYMENT_SOURCES.WALLET,
+                source: usingRewards ? "REWARDS" : PAYMENT_SOURCES.WALLET,
                 service: SERVICES.DATA,
                 reference,
-                description: `Data purchase for ${phone}`
+                description: debitDescription
             },
             client
         );
 
-        // Save pending transaction
-                await TransactionModel.create(
+        await TransactionModel.create(
             {
                 user_id: userId,
                 reference,
@@ -315,9 +328,10 @@ static async purchaseData(userId, payload) {
                 amount,
                 status: TRANSACTION_STATUS.PENDING,
                 network,
-                balance_after: updatedWallet.balance,
+                balance_after: updatedBalance.balance,
                 api_response: {},
-                margin
+                margin,
+                payment_source: usingRewards ? "REWARDS" : "WALLET"
             },
             client
         );
@@ -333,109 +347,109 @@ static async purchaseData(userId, payload) {
 
             if (response.status === "INSUFFICIENT_BALANCE") {
 
-    await WalletService.creditWithClient(
-        userId,
-        {
-            amount,
-            source: PAYMENT_SOURCES.REFUND,
-            service: SERVICES.DATA,
-            reference: `${reference}-REFUND`,
-            description: "Refund for failed data purchase"
-        },
-        client
-    );
+                // Refund goes back to whichever balance actually paid —
+                // a rewards-funded purchase must refund into rewards,
+                // never into the main wallet.
+                if (usingRewards) {
+                    await RewardsService.creditWithClient(userId, amount, client);
+                } else {
+                    await WalletService.creditWithClient(
+                        userId,
+                        {
+                            amount,
+                            source: PAYMENT_SOURCES.REFUND,
+                            service: SERVICES.DATA,
+                            reference: `${reference}-REFUND`,
+                            description: "Refund for failed data purchase"
+                        },
+                        client
+                    );
+                }
 
-    await TransactionModel.updateStatus(
-        reference,
-        TRANSACTION_STATUS.FAILED,
-        response,
-        client
-    );
+                await TransactionModel.updateStatus(
+                    reference,
+                    TRANSACTION_STATUS.FAILED,
+                    response,
+                    client
+                );
 
-    await NotificationService.notify({
-    user_id: userId,
-    title: "❌ Data Purchase Failed",
-    message:
-        `Your data purchase of ₦${amount} could not be completed. Your wallet has been refunded.`,
-    type: "FAILED",
-    category: "purchase",
-    metadata: {
-        reference,
-        amount,
-        service: SERVICES.DATA
-    }
-});
+                await NotificationService.notify({
+                    user_id: userId,
+                    title: "❌ Data Purchase Failed",
+                    message: `Your data purchase of ₦${amount} could not be completed. Your ${usingRewards ? "rewards balance" : "wallet"} has been refunded.`,
+                    type: "FAILED",
+                    category: "purchase",
+                    metadata: {
+                        reference,
+                        amount,
+                        service: SERVICES.DATA
+                    }
+                });
 
-    return {
-        success: false,
-        reference,
-        message:
-            "Data service is temporarily unavailable. Please try again in a few minutes. If the issue persists, kindly contact support."
-    };
-}
+                return {
+                    success: false,
+                    reference,
+                    message:
+                        "Data service is temporarily unavailable. Please try again in a few minutes. If the issue persists, kindly contact support."
+                };
+            }
 
-            console.log("========== BUY DATA RESPONSE ==========");
-            console.log(response);
+            await TransactionModel.updateStatus(
+                reference,
+                TRANSACTION_STATUS.PENDING,
+                response,
+                client
+            );
 
-            // Provider accepted the request.
-// Don't wait for final confirmation.
-// Mark as PENDING and return immediately.
+            setImmediate(async () => {
+                try {
+                    await TransactionStatusService.check(
+                        reference,
+                        userId,
+                        amount
+                    );
+                } catch (error) {
+                    console.error("BACKGROUND CHECK FAILED:", error);
+                }
+            });
 
-await TransactionModel.updateStatus(
-    reference,
-    TRANSACTION_STATUS.PENDING,
-    response,
-    client
-);
-
-setImmediate(async () => {
-    try {
-        await TransactionStatusService.check(
-            reference,
-            userId,
-            amount
-        );
-    } catch (error) {
-        console.error(
-            "BACKGROUND CHECK FAILED:",
-            error
-        );
-    }
-});
-
-return {
-    success: true,
-    message: "Your transaction is being processed.",
-    reference,
-    wallet: {
-        balance: updatedWallet.balance
-    },
-    response: ProviderResponse.data(
-        {
-            network,
-            phone,
-            plan
-        },
-        response,
-        reference
-    )
-};
+            return {
+                success: true,
+                message: "Your transaction is being processed.",
+                reference,
+                wallet: {
+                    balance: updatedBalance.balance
+                },
+                response: ProviderResponse.data(
+                    {
+                        network,
+                        phone,
+                        plan
+                    },
+                    response,
+                    reference
+                )
+            };
 
         } catch (error) {
 
             console.error(error);
 
-            await WalletService.creditWithClient(
-                userId,
-                {
-                    amount,
-                    source: PAYMENT_SOURCES.REFUND,
-                    service: SERVICES.DATA,
-                    reference: `${reference}-REFUND`,
-                    description: "Refund for failed data purchase"
-                },
-                client
-            );
+            if (usingRewards) {
+                await RewardsService.creditWithClient(userId, amount, client);
+            } else {
+                await WalletService.creditWithClient(
+                    userId,
+                    {
+                        amount,
+                        source: PAYMENT_SOURCES.REFUND,
+                        service: SERVICES.DATA,
+                        reference: `${reference}-REFUND`,
+                        description: "Refund for failed data purchase"
+                    },
+                    client
+                );
+            }
 
             await TransactionModel.updateStatus(
                 reference,
@@ -530,8 +544,11 @@ static async purchaseElectricity(userId, payload) {
         meterNo,
         amount,
         phone,
-        pin
+        pin,
+        payment_source = "WALLET"
     } = payload;
+
+    const usingRewards = payment_source === "REWARDS";
 
     await ServiceStatusService.assertEnabled(SERVICES.ELECTRICITY);
 
@@ -555,21 +572,23 @@ static async purchaseElectricity(userId, payload) {
 
     return await DatabaseTransaction.run(async (client) => {
 
-        // Debit wallet
-        const updatedWallet =
-            await WalletService.debitWithClient(
-                userId,
-                {
-                    amount,
-                    source: PAYMENT_SOURCES.WALLET,
-                    service: SERVICES.ELECTRICITY,
-                    reference,
-                    description: `Electricity purchase for meter ${meterNo}`
-                },
-                client
-            );
+        const debitService = usingRewards ? RewardsService : WalletService;
+        const debitDescription = usingRewards
+            ? `Electricity purchase for meter ${meterNo} (paid with rewards)`
+            : `Electricity purchase for meter ${meterNo}`;
 
-        // Save transaction
+        const updatedBalance = await debitService.debitWithClient(
+            userId,
+            {
+                amount,
+                source: usingRewards ? "REWARDS" : PAYMENT_SOURCES.WALLET,
+                service: SERVICES.ELECTRICITY,
+                reference,
+                description: debitDescription
+            },
+            client
+        );
+
         await TransactionModel.create(
             {
                 user_id: userId,
@@ -580,8 +599,9 @@ static async purchaseElectricity(userId, payload) {
                 amount,
                 status: TRANSACTION_STATUS.PENDING,
                 network: electricCompany,
-                balance_after: updatedWallet.balance,
-                api_response: {}
+                balance_after: updatedBalance.balance,
+                api_response: {},
+                payment_source: usingRewards ? "REWARDS" : "WALLET"
             },
             client
         );
@@ -590,29 +610,31 @@ static async purchaseElectricity(userId, payload) {
 
             const response =
                 await buyElectricity({
-
                     electricCompany: companyCode,
                     meterType: meterTypeCode,
                     meterNo,
                     amount,
                     phone,
                     requestId: reference
-
                 });
 
             if (response.status === "INSUFFICIENT_BALANCE") {
 
-                await WalletService.creditWithClient(
-                    userId,
-                    {
-                        amount,
-                        source: PAYMENT_SOURCES.REFUND,
-                        service: SERVICES.ELECTRICITY,
-                        reference: `${reference}-REFUND`,
-                        description: "Refund for failed electricity purchase"
-                    },
-                    client
-                );
+                if (usingRewards) {
+                    await RewardsService.creditWithClient(userId, amount, client);
+                } else {
+                    await WalletService.creditWithClient(
+                        userId,
+                        {
+                            amount,
+                            source: PAYMENT_SOURCES.REFUND,
+                            service: SERVICES.ELECTRICITY,
+                            reference: `${reference}-REFUND`,
+                            description: "Refund for failed electricity purchase"
+                        },
+                        client
+                    );
+                }
 
                 await TransactionModel.updateStatus(
                     reference,
@@ -622,22 +644,22 @@ static async purchaseElectricity(userId, payload) {
                 );
 
                 const notification =
-    notificationTemplates[SERVICES.ELECTRICITY].FAILED({
-        amount
-    });
+                    notificationTemplates[SERVICES.ELECTRICITY].FAILED({
+                        amount
+                    });
 
-await NotificationService.notify({
-    user_id: userId,
-    title: notification.title,
-    message: notification.message,
-    type: "FAILED",
-    category: "purchase",
-    metadata: {
-        reference,
-        amount,
-        service: SERVICES.ELECTRICITY
-    }
-});
+                await NotificationService.notify({
+                    user_id: userId,
+                    title: notification.title,
+                    message: notification.message,
+                    type: "FAILED",
+                    category: "purchase",
+                    metadata: {
+                        reference,
+                        amount,
+                        service: SERVICES.ELECTRICITY
+                    }
+                });
 
                 return {
                     success: false,
@@ -656,53 +678,54 @@ await NotificationService.notify({
             );
 
             setImmediate(async () => {
-    try {
-        await TransactionStatusService.check(
-            reference,
-            userId,
-            amount
-        );
-    } catch (error) {
-        console.error(
-            "BACKGROUND CHECK FAILED:",
-            error
-        );
-    }
-});
+                try {
+                    await TransactionStatusService.check(
+                        reference,
+                        userId,
+                        amount
+                    );
+                } catch (error) {
+                    console.error("BACKGROUND CHECK FAILED:", error);
+                }
+            });
 
             return {
-    success: true,
-    message: "Electricity purchase is being processed.",
-    reference,
-    wallet: {
-        balance: updatedWallet.balance
-    },
-    response: ProviderResponse.electricity(
-        {
-            electricCompany,
-            meterType,
-            meterNo,
-            amount,
-            phone
-        },
-        response,
-        reference
-    )
-};
+                success: true,
+                message: "Electricity purchase is being processed.",
+                reference,
+                wallet: {
+                    balance: updatedBalance.balance
+                },
+                response: ProviderResponse.electricity(
+                    {
+                        electricCompany,
+                        meterType,
+                        meterNo,
+                        amount,
+                        phone
+                    },
+                    response,
+                    reference
+                )
+            };
 
         } catch (error) {
 
-            await WalletService.creditWithClient(
-                userId,
-                {
-                    amount,
-                    source: PAYMENT_SOURCES.REFUND,
-                    service: SERVICES.ELECTRICITY,
-                    reference: `${reference}-REFUND`,
-                    description: "Refund for failed electricity purchase"
-                },
-                client
-            );
+            if (usingRewards) {
+                await RewardsService.creditWithClient(userId, amount, client);
+            } else {
+                await WalletService.creditWithClient(
+                    userId,
+                    {
+                        amount,
+                        source: PAYMENT_SOURCES.REFUND,
+                        service: SERVICES.ELECTRICITY,
+                        reference: `${reference}-REFUND`,
+                        description: "Refund for failed electricity purchase"
+                    },
+                    client
+                );
+            }
 
             await TransactionModel.updateStatus(
                 reference,
@@ -730,8 +753,11 @@ static async purchaseCable(userId, payload) {
         package: cablePackage,
         smartCardNo,
         phone,
-        pin
+        pin,
+        payment_source = "WALLET"
     } = payload;
+
+    const usingRewards = payment_source === "REWARDS";
 
     await ServiceStatusService.assertEnabled(SERVICES.CABLE_TV);
 
@@ -757,9 +783,7 @@ static async purchaseCable(userId, payload) {
         );
     }
 
-    // SECURITY: never trust a client-supplied price. Look up the real
-    // sell price server-side using the package code Clubkonnect expects.
-        const packageResult = await pool.query(
+    const packageResult = await pool.query(
         `SELECT package_code, cost_price, sell_price, is_active, is_promotional
          FROM cable_packages
          WHERE package_code = $1`,
@@ -773,7 +797,7 @@ static async purchaseCable(userId, payload) {
     }
 
     const amount = Number(packageRow.sell_price);
-    const margin = packageRow.is_promotional
+    const margin = (packageRow.is_promotional || usingRewards)
         ? null
         : Number(packageRow.sell_price) - Number(packageRow.cost_price);
 
@@ -781,21 +805,23 @@ static async purchaseCable(userId, payload) {
 
     return await DatabaseTransaction.run(async (client) => {
 
-        // Debit wallet
-        const updatedWallet =
-            await WalletService.debitWithClient(
-                userId,
-                {
-                    amount,
-                    source: PAYMENT_SOURCES.WALLET,
-                    service: SERVICES.CABLE_TV,
-                    reference,
-                    description: `Cable subscription for ${smartCardNo}`
-                },
-                client
-            );
+        const debitService = usingRewards ? RewardsService : WalletService;
+        const debitDescription = usingRewards
+            ? `Cable subscription for ${smartCardNo} (paid with rewards)`
+            : `Cable subscription for ${smartCardNo}`;
 
-        // Save transaction
+        const updatedBalance = await debitService.debitWithClient(
+            userId,
+            {
+                amount,
+                source: usingRewards ? "REWARDS" : PAYMENT_SOURCES.WALLET,
+                service: SERVICES.CABLE_TV,
+                reference,
+                description: debitDescription
+            },
+            client
+        );
+
         await TransactionModel.create(
             {
                 user_id: userId,
@@ -806,42 +832,42 @@ static async purchaseCable(userId, payload) {
                 amount,
                 status: TRANSACTION_STATUS.PENDING,
                 network: cableTv,
-                balance_after: updatedWallet.balance,
-                api_response: {}
+                balance_after: updatedBalance.balance,
+                api_response: {},
+                margin,
+                payment_source: usingRewards ? "REWARDS" : "WALLET"
             },
             client
         );
 
         try {
 
-console.log("Provider:", cableTv);
-console.log("Package Selected:", cablePackage);
-console.log("Package Code:", packageCode);
-
             const response =
-    await buyCable({
-
-        cableTv: cableCode,
-        packageCode,
-        smartCardNo,
-        phone,
-        requestId: reference
-
-    });
+                await buyCable({
+                    cableTv: cableCode,
+                    packageCode,
+                    smartCardNo,
+                    phone,
+                    requestId: reference
+                });
 
             if (response.status === "INSUFFICIENT_BALANCE") {
 
-                await WalletService.creditWithClient(
-                    userId,
-                    {
-                        amount,
-                        source: PAYMENT_SOURCES.REFUND,
-                        service: SERVICES.CABLE_TV,
-                        reference: `${reference}-REFUND`,
-                        description: "Refund for failed cable purchase"
-                    },
-                    client
-                );
+                if (usingRewards) {
+                    await RewardsService.creditWithClient(userId, amount, client);
+                } else {
+                    await WalletService.creditWithClient(
+                        userId,
+                        {
+                            amount,
+                            source: PAYMENT_SOURCES.REFUND,
+                            service: SERVICES.CABLE_TV,
+                            reference: `${reference}-REFUND`,
+                            description: "Refund for failed cable purchase"
+                        },
+                        client
+                    );
+                }
 
                 await TransactionModel.updateStatus(
                     reference,
@@ -851,22 +877,22 @@ console.log("Package Code:", packageCode);
                 );
 
                 const notification =
-    notificationTemplates[SERVICES.CABLE_TV].FAILED({
-        amount
-    });
+                    notificationTemplates[SERVICES.CABLE_TV].FAILED({
+                        amount
+                    });
 
-await NotificationService.notify({
-    user_id: userId,
-    title: notification.title,
-    message: notification.message,
-    type: "FAILED",
-    category: "purchase",
-    metadata: {
-        reference,
-        amount,
-        service: SERVICES.CABLE_TV
-    }
-});
+                await NotificationService.notify({
+                    user_id: userId,
+                    title: notification.title,
+                    message: notification.message,
+                    type: "FAILED",
+                    category: "purchase",
+                    metadata: {
+                        reference,
+                        amount,
+                        service: SERVICES.CABLE_TV
+                    }
+                });
 
                 return {
                     success: false,
@@ -885,23 +911,23 @@ await NotificationService.notify({
             );
 
             setImmediate(async () => {
-    try {
-        await TransactionStatusService.check(
-            reference,
-            userId,
-            amount
-        );
-    } catch (error) {
-        console.error("BACKGROUND CHECK FAILED:", error);
-    }
-});
+                try {
+                    await TransactionStatusService.check(
+                        reference,
+                        userId,
+                        amount
+                    );
+                } catch (error) {
+                    console.error("BACKGROUND CHECK FAILED:", error);
+                }
+            });
 
             return {
                 success: true,
                 message: "Cable subscription is being processed.",
                 reference,
                 wallet: {
-                    balance: updatedWallet.balance
+                    balance: updatedBalance.balance
                 },
                 response: ProviderResponse.cable(
                     {
@@ -918,17 +944,21 @@ await NotificationService.notify({
 
         } catch (error) {
 
-            await WalletService.creditWithClient(
-                userId,
-                {
-                    amount,
-                    source: PAYMENT_SOURCES.REFUND,
-                    service: SERVICES.CABLE_TV,
-                    reference: `${reference}-REFUND`,
-                    description: "Refund for failed cable purchase"
-                },
-                client
-            );
+            if (usingRewards) {
+                await RewardsService.creditWithClient(userId, amount, client);
+            } else {
+                await WalletService.creditWithClient(
+                    userId,
+                    {
+                        amount,
+                        source: PAYMENT_SOURCES.REFUND,
+                        service: SERVICES.CABLE_TV,
+                        reference: `${reference}-REFUND`,
+                        description: "Refund for failed cable purchase"
+                    },
+                    client
+                );
+            }
 
             await TransactionModel.updateStatus(
                 reference,
@@ -953,15 +983,16 @@ static async purchaseWaec(userId, payload) {
 
     const {
         phone,
-        pin
+        pin,
+        payment_source = "WALLET"
     } = payload;
+
+    const usingRewards = payment_source === "REWARDS";
 
     await ServiceStatusService.assertEnabled(SERVICES.WAEC);
 
     await PinService.verifyPin(userId, pin);
 
-    // SECURITY: never trust a client-supplied price. There's only ever
-    // one active WAEC product right now, so just pull the current row.
     const packageResult = await pool.query(
         `SELECT variation_code, sell_price, is_active
          FROM waec_packages
@@ -984,21 +1015,23 @@ static async purchaseWaec(userId, payload) {
 
     return await DatabaseTransaction.run(async (client) => {
 
-        // Debit wallet
-        const updatedWallet =
-            await WalletService.debitWithClient(
-                userId,
-                {
-                    amount,
-                    source: PAYMENT_SOURCES.WALLET,
-                    service: SERVICES.WAEC,
-                    reference,
-                    description: `WAEC Result Checker PIN for ${phone}`
-                },
-                client
-            );
+        const debitService = usingRewards ? RewardsService : WalletService;
+        const debitDescription = usingRewards
+            ? `WAEC Result Checker PIN for ${phone} (paid with rewards)`
+            : `WAEC Result Checker PIN for ${phone}`;
 
-        // Save transaction
+        const updatedBalance = await debitService.debitWithClient(
+            userId,
+            {
+                amount,
+                source: usingRewards ? "REWARDS" : PAYMENT_SOURCES.WALLET,
+                service: SERVICES.WAEC,
+                reference,
+                description: debitDescription
+            },
+            client
+        );
+
         await TransactionModel.create(
             {
                 user_id: userId,
@@ -1008,8 +1041,9 @@ static async purchaseWaec(userId, payload) {
                 phone,
                 amount,
                 status: TRANSACTION_STATUS.PENDING,
-                balance_after: updatedWallet.balance,
-                api_response: {}
+                balance_after: updatedBalance.balance,
+                api_response: {},
+                payment_source: usingRewards ? "REWARDS" : "WALLET"
             },
             client
         );
@@ -1023,29 +1057,27 @@ static async purchaseWaec(userId, payload) {
                 quantity: 1
             });
 
-            // VTpass's /api/pay for WAEC is synchronous — code "000" plus
-            // content.transactions.status tells us the real outcome
-            // immediately. There is no shared background requery wired
-            // up for VTpass (TransactionStatusService.check only knows
-            // how to query ClubKonnect), so success/failure is resolved
-            // directly from this response instead of routing through it.
             const txStatus = response?.content?.transactions?.status;
             const delivered = response?.code === "000" && txStatus === "delivered";
             const pending = response?.code === "000" && txStatus === "pending";
 
             if (!delivered && !pending) {
 
-                await WalletService.creditWithClient(
-                    userId,
-                    {
-                        amount,
-                        source: PAYMENT_SOURCES.REFUND,
-                        service: SERVICES.WAEC,
-                        reference: `${reference}-REFUND`,
-                        description: "Refund for failed WAEC purchase"
-                    },
-                    client
-                );
+                if (usingRewards) {
+                    await RewardsService.creditWithClient(userId, amount, client);
+                } else {
+                    await WalletService.creditWithClient(
+                        userId,
+                        {
+                            amount,
+                            source: PAYMENT_SOURCES.REFUND,
+                            service: SERVICES.WAEC,
+                            reference: `${reference}-REFUND`,
+                            description: "Refund for failed WAEC purchase"
+                        },
+                        client
+                    );
+                }
 
                 await TransactionModel.updateStatus(
                     reference,
@@ -1119,23 +1151,27 @@ static async purchaseWaec(userId, payload) {
                 reference,
                 pin: card ? { serial: card.Serial, pin: card.Pin } : null,
                 wallet: {
-                    balance: updatedWallet.balance
+                    balance: updatedBalance.balance
                 }
             };
 
         } catch (error) {
 
-            await WalletService.creditWithClient(
-                userId,
-                {
-                    amount,
-                    source: PAYMENT_SOURCES.REFUND,
-                    service: SERVICES.WAEC,
-                    reference: `${reference}-REFUND`,
-                    description: "Refund for failed WAEC purchase"
-                },
-                client
-            );
+            if (usingRewards) {
+                await RewardsService.creditWithClient(userId, amount, client);
+            } else {
+                await WalletService.creditWithClient(
+                    userId,
+                    {
+                        amount,
+                        source: PAYMENT_SOURCES.REFUND,
+                        service: SERVICES.WAEC,
+                        reference: `${reference}-REFUND`,
+                        description: "Refund for failed WAEC purchase"
+                    },
+                    client
+                );
+            }
 
             await TransactionModel.updateStatus(
                 reference,

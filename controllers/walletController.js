@@ -1,5 +1,6 @@
 const WalletService = require("../services/walletService");
 const ApiResponse = require("../helpers/apiResponse");
+const RewardsService = require("../services/rewardsService");
 
 class WalletController {
 
@@ -37,6 +38,27 @@ class WalletController {
                 res,
                 "Wallet balance retrieved successfully.",
                 balance
+            );
+
+        } catch (error) {
+            next(error);
+        }
+
+    }
+
+        /**
+     * Get rewards balance
+     */
+    static async getRewardsBalance(req, res, next) {
+
+        try {
+
+            const rewards = await RewardsService.getBalance(req.user.id);
+
+            return ApiResponse.success(
+                res,
+                "Rewards balance retrieved successfully.",
+                { balance: Number(rewards.balance) }
             );
 
         } catch (error) {
