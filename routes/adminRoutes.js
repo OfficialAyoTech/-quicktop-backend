@@ -298,4 +298,21 @@ router.patch(
     adminController.updateWaecPackagePrice
 );
 
+/**
+ * Legal Documents Management (Privacy Policy, Terms of Service)
+ */
+router.get(
+    "/legal-docs",
+    auth,
+    admin,
+    adminController.getLegalDocs
+);
+
+router.patch(
+    "/legal-docs/:docKey",
+    auth,
+    admin,
+    adminController.updateLegalDoc
+);
+
 module.exports = router;

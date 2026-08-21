@@ -43,6 +43,7 @@ const referralRoutes =
 const kycRoutes = require("./routes/kycRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const waecRoutes = require("./routes/waecRoutes");
+const legalRoutes = require("./routes/legalRoutes");
 
 const startTransactionWorker = require("./workers/transactionWorker");
 
@@ -127,6 +128,7 @@ app.use("/api/kyc", kycRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/push", require("./routes/pushRoutes"));
 app.use("/api/waec", waecRoutes);
+app.use("/api/legal", legalRoutes);
 
 // ===================================
 // Home

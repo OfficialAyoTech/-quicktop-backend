@@ -988,6 +988,88 @@ const updateWaecPackagePrice = async (req, res) => {
 
 };
 
+/**
+ * Get all legal documents (Privacy Policy, Terms of Service) for the admin editor
+ */
+const getLegalDocs = async (req, res) => {
+
+    try {
+
+        const result = await pool.query(
+            `SELECT doc_key, content, is_draft, updated_at
+             FROM legal_docs
+             ORDER BY doc_key`
+        );
+
+        return ApiResponse.success(
+            res,
+            "Legal documents retrieved successfully.",
+            result.rows
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+const LEGAL_DOC_KEYS = ["privacy_policy", "terms_of_service"];
+
+/**
+ * Create or update a legal document. Upserts so the very first save for a
+ * doc_key works even if the migration's seed row was somehow skipped.
+ */
+const updateLegalDoc = async (req, res) => {
+
+    try {
+
+        const { docKey } = req.params;
+        const { content, is_draft } = req.body;
+
+        if (!LEGAL_DOC_KEYS.includes(docKey)) {
+            throw new Error("Unknown legal document key.");
+        }
+
+        if (!content || !content.trim()) {
+            throw new Error("Content cannot be empty.");
+        }
+
+        const result = await pool.query(
+            `INSERT INTO legal_docs (doc_key, content, is_draft, updated_by, updated_at)
+             VALUES ($1, $2, $3, $4, now())
+             ON CONFLICT (doc_key) DO UPDATE
+             SET content = EXCLUDED.content,
+                 is_draft = EXCLUDED.is_draft,
+                 updated_by = EXCLUDED.updated_by,
+                 updated_at = now()
+             RETURNING doc_key, content, is_draft, updated_at`,
+            [docKey, content, is_draft !== false, req.user.email]
+        );
+
+        return ApiResponse.success(
+            res,
+            "Legal document updated successfully.",
+            result.rows[0]
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
@@ -1017,5 +1099,7 @@ module.exports = {
     getCashbackRates,
     updateCashbackRate,
     updateDataPlanPromo,
-    updateCablePackagePromo
+    updateCablePackagePromo,
+    getLegalDocs,
+    updateLegalDoc
 };
