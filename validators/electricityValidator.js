@@ -14,7 +14,9 @@ const schema = Joi.object({
 
     phone: Joi.string().required(),
 
-    pin: Joi.string().pattern(/^[0-9]{4}$/).required()
+       pin: Joi.string().pattern(/^[0-9]{4}$/).required(),
+
+    payment_source: Joi.string().valid("WALLET", "REWARDS")
 });
 
 module.exports = (req, res, next) => {
