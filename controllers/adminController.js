@@ -1070,6 +1070,48 @@ const updateLegalDoc = async (req, res) => {
 
 };
 
+const topupProviderCapital = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.topupProviderCapital(
+            req.params.provider,
+            req.body.amount,
+            req.body.narration,
+            req.user
+        );
+
+        return ApiResponse.success(res, result.message, result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
+const reconcileProviderCapital = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.reconcileProviderCapital(
+            req.params.provider,
+            req.body.actual_balance,
+            req.body.reason,
+            req.user
+        );
+
+        return ApiResponse.success(res, result.message, result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
@@ -1101,5 +1143,7 @@ module.exports = {
     updateDataPlanPromo,
     updateCablePackagePromo,
     getLegalDocs,
-    updateLegalDoc
+    updateLegalDoc,
+    topupProviderCapital,
+    reconcileProviderCapital
 };

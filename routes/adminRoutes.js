@@ -315,4 +315,18 @@ router.patch(
     adminController.updateLegalDoc
 );
 
+router.post(
+    "/provider-accounts/:provider/topup",
+    auth,
+    admin,
+    adminController.topupProviderCapital
+);
+
+router.post(
+    "/provider-accounts/:provider/reconcile",
+    auth,
+    admin,
+    adminController.reconcileProviderCapital
+);
+
 module.exports = router;

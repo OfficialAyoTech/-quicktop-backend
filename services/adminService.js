@@ -813,6 +813,198 @@ class AdminService {
 
     }
 
+        /**
+     * Top up provider capital (Admin) — records a manual bank-transfer
+     * top-up to a provider's wallet (e.g. ClubKonnect) in provider_accounts,
+     * with a matching provider_capital_ledger row and admin audit log.
+     */
+    static async topupProviderCapital(
+        provider,
+        amount,
+        narration = "Manual capital top-up",
+        admin
+    ) {
+
+        if (!amount || Number(amount) <= 0) {
+            throw new Error("A valid amount is required.");
+        }
+
+        const client = await pool.connect();
+
+        try {
+
+            await client.query("BEGIN");
+
+            const accountResult = await client.query(
+                `SELECT balance FROM provider_accounts
+                 WHERE provider = $1
+                 FOR UPDATE`,
+                [provider]
+            );
+
+            if (accountResult.rows.length === 0) {
+                throw new Error(`Provider account not found: ${provider}`);
+            }
+
+            const balanceBefore = Number(accountResult.rows[0].balance);
+            const balanceAfter = balanceBefore + Number(amount);
+
+            await client.query(
+                `UPDATE provider_accounts
+                 SET balance = $1, updated_at = now()
+                 WHERE provider = $2`,
+                [balanceAfter, provider]
+            );
+
+            const reference = generateReference("CAPTOP");
+
+            await client.query(
+                `INSERT INTO provider_capital_ledger
+                 (provider, type, amount, balance_before, balance_after, reference, transaction_reference, description, created_by)
+                 VALUES ($1, 'TOPUP', $2, $3, $4, $5, NULL, $6, $7)`,
+                [provider, amount, balanceBefore, balanceAfter, reference, narration, admin.email]
+            );
+
+            await AdminActionModel.log({
+                admin_id: admin.id,
+                admin_email: admin.email,
+                action: "PROVIDER_CAPITAL_TOPUP",
+                target_type: "provider_account",
+                target_id: provider,
+                details: {
+                    amount,
+                    narration,
+                    reference,
+                    balance_before: balanceBefore,
+                    balance_after: balanceAfter
+                }
+            }, client);
+
+            await client.query("COMMIT");
+
+            return {
+                message: "Provider capital topped up successfully.",
+                reference,
+                balance_before: balanceBefore,
+                balance_after: balanceAfter
+            };
+
+        } catch (error) {
+
+            await client.query("ROLLBACK");
+            throw error;
+
+        } finally {
+
+            client.release();
+
+        }
+
+    }
+
+    /**
+     * Reconcile provider capital (Admin) — corrects provider_accounts.balance
+     * to match the provider's real dashboard balance, recording the delta
+     * as a RECONCILIATION_ADJUSTMENT ledger row so drift history is never lost.
+     */
+    static async reconcileProviderCapital(
+        provider,
+        actualBalance,
+        reason,
+        admin
+    ) {
+
+        if (actualBalance === undefined || actualBalance === null) {
+            throw new Error("actualBalance is required.");
+        }
+
+        if (!reason || !reason.trim()) {
+            throw new Error("A reason is required for a reconciliation adjustment.");
+        }
+
+        const client = await pool.connect();
+
+        try {
+
+            await client.query("BEGIN");
+
+            const accountResult = await client.query(
+                `SELECT balance FROM provider_accounts
+                 WHERE provider = $1
+                 FOR UPDATE`,
+                [provider]
+            );
+
+            if (accountResult.rows.length === 0) {
+                throw new Error(`Provider account not found: ${provider}`);
+            }
+
+            const balanceBefore = Number(accountResult.rows[0].balance);
+            const balanceAfter = Number(actualBalance);
+            const delta = Number((balanceAfter - balanceBefore).toFixed(2));
+
+            if (delta === 0) {
+                await client.query("ROLLBACK");
+                return {
+                    message: "No adjustment needed — recorded balance already matches.",
+                    balance: balanceBefore
+                };
+            }
+
+            await client.query(
+                `UPDATE provider_accounts
+                 SET balance = $1, updated_at = now()
+                 WHERE provider = $2`,
+                [balanceAfter, provider]
+            );
+
+            const reference = generateReference("CAPADJ");
+
+            await client.query(
+                `INSERT INTO provider_capital_ledger
+                 (provider, type, amount, balance_before, balance_after, reference, transaction_reference, description, created_by)
+                 VALUES ($1, 'RECONCILIATION_ADJUSTMENT', $2, $3, $4, $5, NULL, $6, $7)`,
+                [provider, delta, balanceBefore, balanceAfter, reference, reason, admin.email]
+            );
+
+            await AdminActionModel.log({
+                admin_id: admin.id,
+                admin_email: admin.email,
+                action: "PROVIDER_CAPITAL_RECONCILE",
+                target_type: "provider_account",
+                target_id: provider,
+                details: {
+                    delta,
+                    reason,
+                    reference,
+                    balance_before: balanceBefore,
+                    balance_after: balanceAfter
+                }
+            }, client);
+
+            await client.query("COMMIT");
+
+            return {
+                message: "Provider capital reconciled successfully.",
+                reference,
+                delta,
+                balance_before: balanceBefore,
+                balance_after: balanceAfter
+            };
+
+        } catch (error) {
+
+            await client.query("ROLLBACK");
+            throw error;
+
+        } finally {
+
+            client.release();
+
+        }
+
+    }
+
 }
 
 module.exports = AdminService;

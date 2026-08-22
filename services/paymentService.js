@@ -38,7 +38,7 @@ class PaymentService {
 
     }
 
-    /**
+        /**
      * Shared wallet funding logic
      */
     static async processSuccessfulPayment(userId, payment) {
@@ -56,7 +56,22 @@ class PaymentService {
             );
         }
 
-        const amount = Number(payment.amount) / 100;
+        // Credit the customer for what they intended to fund, not what
+        // Paystack actually charged. With "pass fees to customer" enabled,
+        // Paystack charges a bit extra (payment.amount) to cover its own
+        // fee (payment.fees), on top of what the customer meant to fund
+        // (payment.requested_amount). Crediting payment.amount would give
+        // the customer free wallet balance equal to the fee, on every
+        // single funding transaction — this must always use requested_amount.
+        if (payment.requested_amount === undefined || payment.requested_amount === null) {
+            throw new Error(
+                `Paystack payload missing requested_amount for reference ${reference} — refusing to guess the credit amount.`
+            );
+        }
+
+        const amount = Number(payment.requested_amount) / 100;
+        const chargedAmount = Number(payment.amount) / 100;
+        const paystackFee = Number(payment.fees || 0) / 100;
 
         if (amount <= 0) {
             throw new Error("Invalid payment amount.");
@@ -91,6 +106,21 @@ class PaymentService {
                     api_response: payment
                 },
                 client
+            );
+
+            await client.query(
+                `INSERT INTO paystack_fee_ledger
+                 (transaction_reference, requested_amount, charged_amount, paystack_fee, channel, paid_at)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 ON CONFLICT (transaction_reference) DO NOTHING`,
+                [
+                    reference,
+                    amount,
+                    chargedAmount,
+                    paystackFee,
+                    payment.channel || null,
+                    payment.paid_at || null
+                ]
             );
 
             return updatedWallet;
