@@ -10,7 +10,7 @@ class ProviderProfitService {
      * must not break the customer-facing success flow; it's logged loudly instead.
      */
         static async recordProfit(transaction) {
-            
+
         try {
 
             let providerCost;
@@ -46,8 +46,25 @@ class ProviderProfitService {
                     providerCost = Number(transaction.amount) - Number(transaction.margin);
                 }
 
+            } else if (transaction.service === "ELECTRICITY") {
+
+                const commissionResult = await pool.query(
+                    `SELECT commission_percent FROM network_commissions
+                     WHERE service = 'ELECTRICITY' AND network = $1`,
+                    [transaction.network.toUpperCase()]
+                );
+
+                const commissionRow = commissionResult.rows[0];
+
+                if (!commissionRow) {
+                    console.error(`No commission rate for ELECTRICITY/${transaction.network} — profit not recorded for ${transaction.reference}`);
+                    return;
+                }
+
+                const rate = Number(commissionRow.commission_percent);
+                providerCost = Number((Number(transaction.amount) * (1 - rate / 100)).toFixed(2));
+
             } else {
-                // ELECTRICITY not yet wired in — needs purchaseElectricity.js reviewed first.
                 return;
             }
 
