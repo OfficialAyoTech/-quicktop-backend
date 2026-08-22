@@ -68,6 +68,17 @@ static async purchaseAirtime(userId, payload) {
         throw new BadRequestError("Invalid network.");
     }
 
+        const commissionResult = await pool.query(
+        `SELECT commission_percent FROM network_commissions WHERE service = 'AIRTIME' AND network = $1`,
+        [network.toUpperCase()]
+    );
+
+    const commissionRate = commissionResult.rows[0]
+        ? Number(commissionResult.rows[0].commission_percent)
+        : 0;
+
+    const providerCost = Number((amount * (1 - commissionRate / 100)).toFixed(2));
+
     const reference = generateReference();
 
     return await DatabaseTransaction.run(async (client) => {
@@ -101,6 +112,7 @@ static async purchaseAirtime(userId, payload) {
                 network,
                 balance_after: updatedBalance.balance,
                 api_response: {},
+                provider_cost: providerCost,
                 payment_source: usingRewards ? "REWARDS" : "WALLET"
             },
             client
@@ -293,6 +305,8 @@ static async purchaseData(userId, payload) {
     // Rewards-funded purchases never earn cashback — this is the same
     // margin=NULL signal used for promotional plans, and it's what stops
     // rewards money from indirectly generating more rewards.
+    const providerCost = Number(planRow.cost_price);
+    
     const margin = (planRow.is_promotional || usingRewards)
         ? null
         : Number(planRow.sell_price) - Number(planRow.cost_price);
@@ -331,6 +345,7 @@ static async purchaseData(userId, payload) {
                 balance_after: updatedBalance.balance,
                 api_response: {},
                 margin,
+                provider_cost: providerCost,
                 payment_source: usingRewards ? "REWARDS" : "WALLET"
             },
             client

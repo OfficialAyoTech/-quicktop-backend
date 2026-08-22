@@ -21,7 +21,8 @@ static async create(transaction, client = pool) {
         network = null,
         balance_after = null,
         api_response = {},
-        margin = null
+        margin = null,
+        provider_cost = null
     } = transaction;
 
     const query = `
@@ -40,11 +41,12 @@ static async create(transaction, client = pool) {
             network,
             balance_after,
             api_response,
-            margin
+            margin,
+            provider_cost
         )
         VALUES
         (
-            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14
+            $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15
         )
         RETURNING *;
     `;
@@ -63,7 +65,8 @@ static async create(transaction, client = pool) {
         network,
         balance_after,
         api_response,
-        margin
+        margin,
+        provider_cost
     ];
 
     const result = await client.query(query, values);

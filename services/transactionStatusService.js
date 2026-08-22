@@ -5,6 +5,7 @@ const notificationTemplates = require("../utils/notificationTemplates");
 const ReferralModel = require("../models/referralModel");
 const UserModel = require("../models/userModel");
 const pool = require("../config/database");
+const ProviderProfitService = require("./providerProfitService");
 
 const {
     queryTransaction
@@ -103,6 +104,8 @@ class TransactionStatusService {
             if (!referralAwarded) {
                 await this.maybeAwardCashback(userId, transaction, reference);
             }
+
+            await ProviderProfitService.recordProfit(transaction);
 
         }
 
