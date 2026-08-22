@@ -127,7 +127,7 @@ static async purchaseAirtime(userId, payload) {
                 requestId: reference
             });
 
-            if (response.status === "INSUFFICIENT_BALANCE") {
+           if (response.status !== "ORDER_RECEIVED") {
 
                 if (usingRewards) {
                     await RewardsService.creditWithClient(userId, amount, client);
@@ -360,7 +360,7 @@ static async purchaseData(userId, payload) {
     requestId: reference
 });
 
-            if (response.status === "INSUFFICIENT_BALANCE") {
+            if (response.status !== "ORDER_RECEIVED") {
 
                 // Refund goes back to whichever balance actually paid —
                 // a rewards-funded purchase must refund into rewards,
@@ -633,7 +633,7 @@ static async purchaseElectricity(userId, payload) {
                     requestId: reference
                 });
 
-            if (response.status === "INSUFFICIENT_BALANCE") {
+           if (response.status !== "ORDER_RECEIVED") {
 
                 if (usingRewards) {
                     await RewardsService.creditWithClient(userId, amount, client);
@@ -787,16 +787,7 @@ static async purchaseCable(userId, payload) {
         );
     }
 
-    const packageCode =
-        CABLE_PACKAGES[cableTv.toUpperCase()]?.[
-            cablePackage.toUpperCase()
-        ];
-
-    if (!packageCode) {
-        throw new BadRequestError(
-            "Invalid cable package."
-        );
-    }
+        const packageCode = cablePackage;
 
     const packageResult = await pool.query(
         `SELECT package_code, cost_price, sell_price, is_active, is_promotional
@@ -866,7 +857,7 @@ static async purchaseCable(userId, payload) {
                     requestId: reference
                 });
 
-            if (response.status === "INSUFFICIENT_BALANCE") {
+            if (response.status !== "ORDER_RECEIVED") {
 
                 if (usingRewards) {
                     await RewardsService.creditWithClient(userId, amount, client);
