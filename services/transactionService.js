@@ -288,11 +288,11 @@ static async purchaseData(userId, payload) {
     }
 
     const planResult = await pool.query(
-        `SELECT plan_id, plan_code, cost_price, sell_price, is_active, is_promotional
-         FROM data_plans
-         WHERE network = $1 AND plan_code = $2`,
-        [network.toUpperCase(), plan]
-    );
+    `SELECT plan_id, plan_code, provider_plan_id, cost_price, sell_price, is_active, is_promotional
+     FROM data_plans
+     WHERE network = $1 AND plan_code = $2`,
+    [network.toUpperCase(), plan]
+);
 
     const planRow = planResult.rows[0];
 
@@ -353,12 +353,12 @@ static async purchaseData(userId, payload) {
 
         try {
 
-            const response = await buyData({
-                network: networkCode,
-                plan,
-                phone,
-                requestId: reference
-            });
+           const response = await buyData({
+    network: networkCode,
+    plan: planRow.provider_plan_id,
+    phone,
+    requestId: reference
+});
 
             if (response.status === "INSUFFICIENT_BALANCE") {
 

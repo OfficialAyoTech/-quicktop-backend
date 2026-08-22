@@ -10,8 +10,8 @@ class ProviderProfitService {
      * must not break the customer-facing success flow; it's logged loudly instead.
      */
         static async recordProfit(transaction) {
+            
         try {
-            console.log("🔍 recordProfit called with:", transaction.reference, transaction.provider_cost);
 
             let providerCost;
 
