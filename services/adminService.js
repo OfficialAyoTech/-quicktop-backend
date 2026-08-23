@@ -760,6 +760,51 @@ class AdminService {
                 client
             );
 
+            // --- Reverse provider profit + capital, if this transaction had one ---
+            const profitReversalResult = await client.query(
+                `UPDATE provider_profit_ledger
+                 SET status = 'REVERSED'
+                 WHERE transaction_reference = $1 AND status = 'ACTIVE'
+                 RETURNING provider_cost, service`,
+                [transaction.reference]
+            );
+
+            if (profitReversalResult.rowCount === 1) {
+
+                const { provider_cost: providerCost } = profitReversalResult.rows[0];
+
+                const capitalResult = await client.query(
+                    `UPDATE provider_accounts
+                     SET balance = balance + $1, updated_at = now()
+                     WHERE provider = 'CLUBKONNECT'
+                     RETURNING balance`,
+                    [providerCost]
+                );
+
+                if (capitalResult.rows.length === 0) {
+                    throw new Error("provider_accounts row for CLUBKONNECT not found during reversal");
+                }
+
+                const capBalanceAfter = Number(capitalResult.rows[0].balance);
+                const capBalanceBefore = capBalanceAfter - Number(providerCost);
+
+                await client.query(
+                    `INSERT INTO provider_capital_ledger
+                     (provider, type, amount, balance_before, balance_after, reference, transaction_reference, description, created_by)
+                     VALUES ('CLUBKONNECT', 'REVERSAL', $1, $2, $3, $4, $5, $6, $7)`,
+                    [
+                        providerCost,
+                        capBalanceBefore,
+                        capBalanceAfter,
+                        generateReference("CAPREV"),
+                        transaction.reference,
+                        `Capital reversal for ${transaction.reference}`,
+                        admin.email
+                    ]
+                );
+
+            }
+
             await AdminActionModel.log({
                 admin_id: admin.id,
                 admin_email: admin.email,
