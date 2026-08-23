@@ -1210,10 +1210,14 @@ const getFinancialOverview = async (req, res) => {
 
     try {
 
-        const validRanges = ["today", "week", "month", "all"];
+        const validRanges = ["today", "yesterday", "week", "last_week", "month", "last_month", "custom", "all"];
         const range = validRanges.includes(req.query.range) ? req.query.range : "all";
 
-        const result = await AdminService.getFinancialOverview(range);
+        const result = await AdminService.getFinancialOverview(
+            range,
+            req.query.from_date,
+            req.query.to_date
+        );
 
         return ApiResponse.success(res, "Financial overview retrieved successfully.", result);
 

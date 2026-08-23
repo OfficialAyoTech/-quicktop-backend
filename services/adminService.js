@@ -1304,17 +1304,117 @@ class AdminService {
             withdrawal: result.rows[0]
         };
 
-    }    /**
+    }
+
+        /**
+     * Resolves a range keyword (or custom bounds) into { startDate, endDate }.
+     * endDate === null means "open-ended, up to now" — used for the
+     * original today/week/month/all ranges. Bounded ranges (yesterday,
+     * last_week, last_month, custom) get both ends so they don't leak
+     * into the present.
+     */
+    static getRangeStartDate(range, fromDate, toDate) {
+
+        const now = new Date();
+
+        if (range === "today") {
+
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            return { startDate: start, endDate: null };
+
+        }
+
+        if (range === "yesterday") {
+
+            const start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+            const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            return { startDate: start, endDate: end };
+
+        }
+
+        if (range === "week") {
+
+            // Trailing 7 days, open-ended (existing behavior, unchanged)
+            const start = new Date(now);
+            start.setDate(start.getDate() - 7);
+            return { startDate: start, endDate: null };
+
+        }
+
+        if (range === "last_week") {
+
+            // Previous complete calendar week, Monday–Sunday
+            const dayOfWeek = now.getDay(); // 0=Sun..6=Sat
+            const daysSinceMonday = (dayOfWeek + 6) % 7;
+            const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - daysSinceMonday);
+            const lastMonday = new Date(thisMonday);
+            lastMonday.setDate(lastMonday.getDate() - 7);
+            return { startDate: lastMonday, endDate: thisMonday };
+
+        }
+
+        if (range === "month") {
+
+            // Calendar-month-to-date (existing behavior, unchanged)
+            const start = new Date(now.getFullYear(), now.getMonth(), 1);
+            return { startDate: start, endDate: null };
+
+        }
+
+        if (range === "last_month") {
+
+            const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const end = new Date(now.getFullYear(), now.getMonth(), 1);
+            return { startDate: start, endDate: end };
+
+        }
+
+        if (range === "custom") {
+
+            if (!fromDate || !toDate) {
+                throw new Error("Custom range requires both from_date and to_date.");
+            }
+
+            const start = new Date(fromDate);
+            // Include the entire to_date day, not just midnight of it
+            const end = new Date(toDate);
+            end.setDate(end.getDate() + 1);
+
+            if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+                throw new Error("Invalid from_date or to_date.");
+            }
+
+            return { startDate: start, endDate: end };
+
+        }
+
+        // "all" or unrecognized — no filtering
+        return { startDate: null, endDate: null };
+
+    }
+    
+    /**
      * Financial Overview dashboard data, optionally filtered to a date
      * range. Provider capital balance is always current — it's a running
      * total, not something that makes sense to filter by date.
      */
-    static async getFinancialOverview(range = "all") {
+           static async getFinancialOverview(range = "all", fromDate, toDate) {
 
-        const startDate = this.getRangeStartDate(range);
-        const dateParam = startDate ? [startDate] : [];
-        const dateClause = startDate ? "WHERE created_at >= $1" : "";
-        const expenseDateClause = startDate ? "WHERE expense_date >= $1" : "";
+        const { startDate, endDate } = this.getRangeStartDate(range, fromDate, toDate);
+
+        const dateParam = [];
+        let dateClause = "";
+        let expenseDateClause = "";
+
+        if (startDate && endDate) {
+            dateParam.push(startDate, endDate);
+            dateClause = "WHERE created_at >= $1 AND created_at < $2";
+            expenseDateClause = "WHERE expense_date >= $1 AND expense_date < $2";
+        } else if (startDate) {
+            dateParam.push(startDate);
+            dateClause = "WHERE created_at >= $1";
+            expenseDateClause = "WHERE expense_date >= $1";
+        }
 
         // Profit by service
         const profitByServiceResult = await pool.query(
@@ -1337,10 +1437,14 @@ class AdminService {
             dateParam
         );
 
+                const referralDateCondition =
+            startDate && endDate ? "AND created_at >= $1 AND created_at < $2" :
+            startDate ? "AND created_at >= $1" : "";
+
         const referralResult = await pool.query(
             `SELECT COALESCE(SUM(amount), 0) AS total FROM wallet_ledger
              WHERE source = 'REFERRAL' AND service = 'REFERRAL_BONUS'
-             ${startDate ? "AND created_at >= $1" : ""}`,
+             ${referralDateCondition}`,
             dateParam
         );
 
@@ -1359,18 +1463,26 @@ class AdminService {
             dateParam
         );
 
+                const withdrawalsDateCondition =
+            startDate && endDate ? "WHERE requested_at >= $1 AND requested_at < $2" :
+            startDate ? "WHERE requested_at >= $1" : "";
+
         const withdrawalsResult = await pool.query(
             `SELECT
                 COALESCE(SUM(amount) FILTER (WHERE status = 'COMPLETED'), 0) AS total_completed,
                 COALESCE(SUM(amount) FILTER (WHERE status = 'PENDING'), 0) AS total_pending,
                 COUNT(*) FILTER (WHERE status = 'PENDING') AS pending_count
              FROM profit_withdrawals
-             ${startDate ? "WHERE requested_at >= $1" : ""}`,
+             ${withdrawalsDateCondition}`,
             dateParam
         );
 
-        const capitalResult = await pool.query(
+                const capitalResult = await pool.query(
             `SELECT balance FROM provider_accounts WHERE provider = 'CLUBKONNECT'`
+        );
+
+        const walletLiabilityResult = await pool.query(
+            `SELECT COALESCE(SUM(balance), 0) AS total FROM wallets`
         );
 
         const grossProfit = Number(grossProfitResult.rows[0].total);
@@ -1391,6 +1503,8 @@ class AdminService {
             provider_capital: {
                 clubkonnect_balance: Number(capitalResult.rows[0]?.balance || 0)
             },
+
+            customer_wallet_liability: Number(walletLiabilityResult.rows[0].total),
 
             profit: {
                 gross_profit: grossProfit,
