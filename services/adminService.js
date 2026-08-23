@@ -1005,6 +1005,378 @@ class AdminService {
 
     }
 
+        /**
+     * Log a business expense (Admin)
+     */
+    static async createExpense(
+        category,
+        amount,
+        description,
+        expenseDate,
+        admin
+    ) {
+
+        if (!category || !category.trim()) {
+            throw new Error("A category is required.");
+        }
+
+        if (!amount || Number(amount) <= 0) {
+            throw new Error("A valid amount is required.");
+        }
+
+        if (!description || !description.trim()) {
+            throw new Error("A description is required.");
+        }
+
+        const reference = generateReference("EXP");
+
+        const result = await pool.query(
+            `INSERT INTO business_expenses
+             (category, amount, description, reference, expense_date, created_by)
+             VALUES ($1, $2, $3, $4, COALESCE($5, CURRENT_DATE), $6)
+             RETURNING *`,
+            [category.trim(), amount, description.trim(), reference, expenseDate || null, admin.email]
+        );
+
+        await AdminActionModel.log({
+            admin_id: admin.id,
+            admin_email: admin.email,
+            action: "EXPENSE_CREATE",
+            target_type: "business_expense",
+            target_id: reference,
+            details: {
+                category,
+                amount,
+                description,
+                reference
+            }
+        });
+
+        return {
+            message: "Expense logged successfully.",
+            expense: result.rows[0]
+        };
+
+    }
+
+    /**
+     * Get business expenses (Admin) — paginated, optionally filtered by category or date range
+     */
+    static async getExpenses(query) {
+
+        const page = Number(query.page) || 1;
+        const limit = Number(query.limit) || 20;
+        const offset = (page - 1) * limit;
+
+        const conditions = [];
+        const params = [];
+        let paramIndex = 1;
+
+        if (query.category) {
+            conditions.push(`category = $${paramIndex++}`);
+            params.push(query.category);
+        }
+
+        if (query.from_date) {
+            conditions.push(`expense_date >= $${paramIndex++}`);
+            params.push(query.from_date);
+        }
+
+        if (query.to_date) {
+            conditions.push(`expense_date <= $${paramIndex++}`);
+            params.push(query.to_date);
+        }
+
+        const whereClause = conditions.length
+            ? `WHERE ${conditions.join(" AND ")}`
+            : "";
+
+        const result = await pool.query(
+            `SELECT * FROM business_expenses
+             ${whereClause}
+             ORDER BY expense_date DESC, created_at DESC
+             LIMIT $${paramIndex++} OFFSET $${paramIndex++}`,
+            [...params, limit, offset]
+        );
+
+        const countResult = await pool.query(
+            `SELECT COUNT(*) FROM business_expenses ${whereClause}`,
+            params
+        );
+
+        return {
+            expenses: result.rows,
+            total: Number(countResult.rows[0].count),
+            page,
+            limit
+        };
+
+    }
+
+        /**
+     * Calculate withdrawable profit: gross profit earned across all
+     * confirmed sales, minus cashback granted, referral bonuses paid,
+     * business expenses, and profit already withdrawn or reserved by a
+     * pending withdrawal request.
+     */
+    static async getWithdrawableProfit() {
+
+        const grossProfitResult = await pool.query(
+            `SELECT COALESCE(SUM(gross_profit), 0) AS total FROM provider_profit_ledger`
+        );
+
+        const cashbackResult = await pool.query(
+            `SELECT COALESCE(SUM(cashback_amount), 0) AS total FROM cashback_transactions`
+        );
+
+        const referralResult = await pool.query(
+            `SELECT COALESCE(SUM(amount), 0) AS total FROM wallet_ledger
+             WHERE source = 'REFERRAL' AND service = 'REFERRAL_BONUS'`
+        );
+
+        const expensesResult = await pool.query(
+            `SELECT COALESCE(SUM(amount), 0) AS total FROM business_expenses`
+        );
+
+        const withdrawnResult = await pool.query(
+            `SELECT COALESCE(SUM(amount), 0) AS total FROM profit_withdrawals
+             WHERE status IN ('PENDING', 'COMPLETED')`
+        );
+
+        const grossProfit = Number(grossProfitResult.rows[0].total);
+        const cashback = Number(cashbackResult.rows[0].total);
+        const referrals = Number(referralResult.rows[0].total);
+        const expenses = Number(expensesResult.rows[0].total);
+        const alreadyReservedOrWithdrawn = Number(withdrawnResult.rows[0].total);
+
+        const withdrawable = Number((
+            grossProfit - cashback - referrals - expenses - alreadyReservedOrWithdrawn
+        ).toFixed(2));
+
+        return {
+            gross_profit: grossProfit,
+            cashback_paid: cashback,
+            referral_bonuses_paid: referrals,
+            business_expenses: expenses,
+            already_withdrawn_or_pending: alreadyReservedOrWithdrawn,
+            withdrawable_profit: withdrawable
+        };
+
+    }
+
+    /**
+     * Request a profit withdrawal (Admin). Records intent to withdraw —
+     * does not move any real money. The admin marks it COMPLETED
+     * separately, once the money has actually been moved out.
+     */
+    static async requestWithdrawal(amount, destination, notes, admin) {
+
+        if (!amount || Number(amount) <= 0) {
+            throw new Error("A valid amount is required.");
+        }
+
+        const { withdrawable_profit } = await this.getWithdrawableProfit();
+
+        if (Number(amount) > withdrawable_profit) {
+            throw new Error(
+                `Requested amount (₦${amount}) exceeds withdrawable profit (₦${withdrawable_profit}).`
+            );
+        }
+
+        const reference = generateReference("WD");
+
+        const result = await pool.query(
+            `INSERT INTO profit_withdrawals
+             (amount, status, reference, destination, requested_by, notes)
+             VALUES ($1, 'PENDING', $2, $3, $4, $5)
+             RETURNING *`,
+            [amount, reference, destination || null, admin.email, notes || null]
+        );
+
+        await AdminActionModel.log({
+            admin_id: admin.id,
+            admin_email: admin.email,
+            action: "WITHDRAWAL_REQUEST",
+            target_type: "profit_withdrawal",
+            target_id: reference,
+            details: { amount, destination, reference }
+        });
+
+        return {
+            message: "Withdrawal request recorded.",
+            withdrawal: result.rows[0]
+        };
+
+    }
+
+    /**
+     * Resolve a withdrawal (Admin) — mark it COMPLETED once the money has
+     * actually been moved out, or REJECTED/CANCELLED to release the
+     * reserved amount back into withdrawable profit.
+     */
+    static async resolveWithdrawal(reference, status, admin) {
+
+        const validStatuses = ["COMPLETED", "REJECTED", "CANCELLED"];
+
+        if (!validStatuses.includes(status)) {
+            throw new Error(`Status must be one of: ${validStatuses.join(", ")}`);
+        }
+
+        const existing = await pool.query(
+            `SELECT * FROM profit_withdrawals WHERE reference = $1`,
+            [reference]
+        );
+
+        if (existing.rows.length === 0) {
+            throw new Error("Withdrawal not found.");
+        }
+
+        if (existing.rows[0].status !== "PENDING") {
+            throw new Error(
+                `Withdrawal is already ${existing.rows[0].status} — cannot change it again.`
+            );
+        }
+
+        const result = await pool.query(
+            `UPDATE profit_withdrawals
+             SET status = $1, approved_by = $2, resolved_at = now()
+             WHERE reference = $3
+             RETURNING *`,
+            [status, admin.email, reference]
+        );
+
+        await AdminActionModel.log({
+            admin_id: admin.id,
+            admin_email: admin.email,
+            action: "WITHDRAWAL_RESOLVE",
+            target_type: "profit_withdrawal",
+            target_id: reference,
+            details: { status, reference }
+        });
+
+        return {
+            message: `Withdrawal marked ${status.toLowerCase()}.`,
+            withdrawal: result.rows[0]
+        };
+
+    }    /**
+     * Financial Overview dashboard data, optionally filtered to a date
+     * range. Provider capital balance is always current — it's a running
+     * total, not something that makes sense to filter by date.
+     */
+    static async getFinancialOverview(range = "all") {
+
+        const startDate = this.getRangeStartDate(range);
+        const dateParam = startDate ? [startDate] : [];
+        const dateClause = startDate ? "WHERE created_at >= $1" : "";
+        const expenseDateClause = startDate ? "WHERE expense_date >= $1" : "";
+
+        // Profit by service
+        const profitByServiceResult = await pool.query(
+            `SELECT service, COALESCE(SUM(gross_profit), 0) AS total
+             FROM provider_profit_ledger
+             ${dateClause}
+             GROUP BY service`,
+            dateParam
+        );
+
+        const grossProfitResult = await pool.query(
+            `SELECT COALESCE(SUM(gross_profit), 0) AS total
+             FROM provider_profit_ledger ${dateClause}`,
+            dateParam
+        );
+
+        const cashbackResult = await pool.query(
+            `SELECT COALESCE(SUM(cashback_amount), 0) AS total
+             FROM cashback_transactions ${dateClause}`,
+            dateParam
+        );
+
+        const referralResult = await pool.query(
+            `SELECT COALESCE(SUM(amount), 0) AS total FROM wallet_ledger
+             WHERE source = 'REFERRAL' AND service = 'REFERRAL_BONUS'
+             ${startDate ? "AND created_at >= $1" : ""}`,
+            dateParam
+        );
+
+        const expensesResult = await pool.query(
+            `SELECT COALESCE(SUM(amount), 0) AS total
+             FROM business_expenses ${expenseDateClause}`,
+            dateParam
+        );
+
+        const paystackResult = await pool.query(
+            `SELECT
+                COALESCE(SUM(requested_amount), 0) AS total_funded,
+                COALESCE(SUM(paystack_fee), 0) AS total_fees,
+                COUNT(*) AS funding_count
+             FROM paystack_fee_ledger ${dateClause}`,
+            dateParam
+        );
+
+        const withdrawalsResult = await pool.query(
+            `SELECT
+                COALESCE(SUM(amount) FILTER (WHERE status = 'COMPLETED'), 0) AS total_completed,
+                COALESCE(SUM(amount) FILTER (WHERE status = 'PENDING'), 0) AS total_pending,
+                COUNT(*) FILTER (WHERE status = 'PENDING') AS pending_count
+             FROM profit_withdrawals
+             ${startDate ? "WHERE requested_at >= $1" : ""}`,
+            dateParam
+        );
+
+        const capitalResult = await pool.query(
+            `SELECT balance FROM provider_accounts WHERE provider = 'CLUBKONNECT'`
+        );
+
+        const grossProfit = Number(grossProfitResult.rows[0].total);
+        const cashback = Number(cashbackResult.rows[0].total);
+        const referrals = Number(referralResult.rows[0].total);
+        const expenses = Number(expensesResult.rows[0].total);
+
+        const netProfit = Number((grossProfit - cashback - referrals - expenses).toFixed(2));
+
+        // Withdrawable profit is always all-time by definition — it's
+        // "what's safe to take out right now," not scoped to a range.
+        const { withdrawable_profit } = await this.getWithdrawableProfit();
+
+        return {
+
+            range,
+
+            provider_capital: {
+                clubkonnect_balance: Number(capitalResult.rows[0]?.balance || 0)
+            },
+
+            profit: {
+                gross_profit: grossProfit,
+                by_service: profitByServiceResult.rows.map(row => ({
+                    service: row.service,
+                    gross_profit: Number(row.total)
+                })),
+                cashback_paid: cashback,
+                referral_bonuses_paid: referrals,
+                business_expenses: expenses,
+                net_profit: netProfit
+            },
+
+            withdrawable_profit,
+
+            paystack: {
+                total_funded: Number(paystackResult.rows[0].total_funded),
+                total_fees_charged: Number(paystackResult.rows[0].total_fees),
+                funding_count: Number(paystackResult.rows[0].funding_count)
+            },
+
+            withdrawals: {
+                total_completed: Number(withdrawalsResult.rows[0].total_completed),
+                total_pending: Number(withdrawalsResult.rows[0].total_pending),
+                pending_count: Number(withdrawalsResult.rows[0].pending_count)
+            }
+
+        };
+
+    }
+
 }
 
 module.exports = AdminService;

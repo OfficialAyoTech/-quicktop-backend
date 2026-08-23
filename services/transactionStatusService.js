@@ -60,14 +60,20 @@ class TransactionStatusService {
         console.log("========== TRANSACTION STATUS ==========");
         console.log(transactionStatus);
 
-        const transaction =
+                const transaction =
             await TransactionModel.findByReference(reference);
 
-        await TransactionModel.updateStatus(
-            reference,
-            transactionStatus,
-            queryResponse
-        );
+        const claimed =
+            await TransactionModel.updateStatusIfPending(
+                reference,
+                transactionStatus,
+                queryResponse
+            );
+
+        if (!claimed) {
+            console.log(`========== ${reference} ALREADY RESOLVED BY ANOTHER CHECK — SKIPPING ==========`);
+            return transaction.status;
+        }
 
         console.log("========== DATABASE UPDATED ==========");
 

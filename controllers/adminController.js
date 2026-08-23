@@ -1112,6 +1112,119 @@ const reconcileProviderCapital = async (req, res) => {
 
 };
 
+const createExpense = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.createExpense(
+            req.body.category,
+            req.body.amount,
+            req.body.description,
+            req.body.expense_date,
+            req.user
+        );
+
+        return ApiResponse.success(res, result.message, result.expense);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
+const getExpenses = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.getExpenses(req.query);
+
+        return ApiResponse.success(res, "Expenses retrieved successfully.", result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
+const getWithdrawableProfit = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.getWithdrawableProfit();
+        return ApiResponse.success(res, "Withdrawable profit calculated.", result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
+const requestWithdrawal = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.requestWithdrawal(
+            req.body.amount,
+            req.body.destination,
+            req.body.notes,
+            req.user
+        );
+
+        return ApiResponse.success(res, result.message, result.withdrawal);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
+const resolveWithdrawal = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.resolveWithdrawal(
+            req.params.reference,
+            req.body.status,
+            req.user
+        );
+
+        return ApiResponse.success(res, result.message, result.withdrawal);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
+const getFinancialOverview = async (req, res) => {
+
+    try {
+
+        const validRanges = ["today", "week", "month", "all"];
+        const range = validRanges.includes(req.query.range) ? req.query.range : "all";
+
+        const result = await AdminService.getFinancialOverview(range);
+
+        return ApiResponse.success(res, "Financial overview retrieved successfully.", result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
@@ -1145,5 +1258,11 @@ module.exports = {
     getLegalDocs,
     updateLegalDoc,
     topupProviderCapital,
-    reconcileProviderCapital
+    reconcileProviderCapital,
+    createExpense,
+    getExpenses,
+    getWithdrawableProfit,
+    requestWithdrawal,
+    resolveWithdrawal,
+    getFinancialOverview
 };

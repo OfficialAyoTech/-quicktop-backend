@@ -218,6 +218,41 @@ FROM transactions
 
         return result.rows[0];
     }
+
+        /**
+     * Update transaction status, but only if it's still pending. Used by
+     * TransactionStatusService.check() to atomically claim a transaction
+     * before applying any wallet-affecting outcome — this is the guard
+     * against the purchase's setImmediate() check and the 20-second
+     * background poller both resolving the same transaction at once.
+     * Returns undefined if another caller already claimed it first.
+     */
+    static async updateStatusIfPending(
+        reference,
+        status,
+        apiResponse,
+        client = pool
+    ) {
+
+        const result = await client.query(
+            `
+            UPDATE transactions
+            SET
+                status = $1,
+                api_response = $2
+            WHERE reference = $3
+            AND status = 'pending'
+            RETURNING *;
+            `,
+            [
+                status,
+                apiResponse,
+                reference
+            ]
+        );
+
+        return result.rows[0];
+    }
     
 /**
  * Get all pending transactions

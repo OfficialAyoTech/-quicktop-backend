@@ -329,4 +329,46 @@ router.post(
     adminController.reconcileProviderCapital
 );
 
+router.post(
+    "/expenses",
+    auth,
+    admin,
+    adminController.createExpense
+);
+
+router.get(
+    "/expenses",
+    auth,
+    admin,
+    adminController.getExpenses
+);
+
+router.get(
+    "/withdrawals/available",
+    auth,
+    admin,
+    adminController.getWithdrawableProfit
+);
+
+router.post(
+    "/withdrawals",
+    auth,
+    admin,
+    adminController.requestWithdrawal
+);
+
+router.patch(
+    "/withdrawals/:reference/resolve",
+    auth,
+    admin,
+    adminController.resolveWithdrawal
+);
+
+router.get(
+    "/financial-overview",
+    auth,
+    admin,
+    adminController.getFinancialOverview
+);
+
 module.exports = router;
