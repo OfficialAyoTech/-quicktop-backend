@@ -371,4 +371,21 @@ router.get(
     adminController.getFinancialOverview
 );
 
+/**
+ * Paystack Settlement Tracking
+ */
+router.post(
+    "/settlements/sync",
+    auth,
+    admin,
+    adminController.syncSettlements
+);
+
+router.get(
+    "/settlements",
+    auth,
+    admin,
+    adminController.getSettlements
+);
+
 module.exports = router;

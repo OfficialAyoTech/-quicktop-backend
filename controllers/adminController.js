@@ -1229,6 +1229,38 @@ const getFinancialOverview = async (req, res) => {
 
 };
 
+const syncSettlements = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.syncSettlements(req.user);
+
+        return ApiResponse.success(res, result.message, result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
+const getSettlements = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.getSettlements(req.query);
+
+        return ApiResponse.success(res, "Settlements retrieved successfully.", result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
@@ -1268,5 +1300,7 @@ module.exports = {
     getWithdrawableProfit,
     requestWithdrawal,
     resolveWithdrawal,
-    getFinancialOverview
+    getFinancialOverview,
+    syncSettlements,
+    getSettlements
 };

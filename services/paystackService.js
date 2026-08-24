@@ -47,7 +47,7 @@ class PaystackService {
 
     }
 
-    /**
+        /**
      * Verify Payment
      */
     static async verifyPayment(reference) {
@@ -76,6 +76,34 @@ class PaystackService {
     }
 
 }
+
+    /**
+     * List Settlements — fetches a page of settlement payouts from Paystack.
+     * Used by the daily/manual settlement sync, not the customer-facing flow.
+     */
+    static async listSettlements(perPage = 50, page = 1) {
+
+        try {
+
+            const response = await api.get(
+                `/settlement?perPage=${perPage}&page=${page}`
+            );
+
+            return response.data;
+
+        } catch (error) {
+
+            console.log("========== PAYSTACK SETTLEMENTS ERROR ==========");
+            console.log(error.response?.data || error.message);
+
+            throw new Error(
+                error.response?.data?.message ||
+                "Unable to fetch settlements."
+            );
+
+        }
+
+    }
 
 }
 

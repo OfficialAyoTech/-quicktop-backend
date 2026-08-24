@@ -1532,6 +1532,100 @@ class AdminService {
                 pending_count: Number(withdrawalsResult.rows[0].pending_count)
             }
 
+         };
+
+    }
+
+    /**
+     * Sync settlements from Paystack — pulls the latest settlement
+     * payouts and upserts them into paystack_settlements. Safe to run
+     * repeatedly (manual button, not a background job) since it's
+     * keyed on Paystack's own settlement_id — re-running never
+     * duplicates a row, only refreshes its status/amount if changed.
+     */
+    static async syncSettlements(admin) {
+
+        const PaystackService = require("./paystackService");
+
+        const response = await PaystackService.listSettlements(50, 1);
+
+        const settlements = response.data || [];
+
+        let inserted = 0;
+        let updated = 0;
+
+        for (const s of settlements) {
+
+            const result = await pool.query(
+                `INSERT INTO paystack_settlements
+                 (settlement_id, status, currency, total_amount, settlement_date, synced_at)
+                 VALUES ($1, $2, $3, $4, $5, now())
+                 ON CONFLICT (settlement_id) DO UPDATE
+                 SET status = EXCLUDED.status,
+                     total_amount = EXCLUDED.total_amount,
+                     settlement_date = EXCLUDED.settlement_date,
+                     synced_at = now()
+                 RETURNING (xmax = 0) AS inserted`,
+                [
+                    s.id,
+                    s.status,
+                    s.currency || "NGN",
+                    Number(s.total_amount) / 100,
+                    s.settlement_date || null
+                ]
+            );
+
+            if (result.rows[0].inserted) {
+                inserted++;
+            } else {
+                updated++;
+            }
+
+        }
+
+        await AdminActionModel.log({
+            admin_id: admin.id,
+            admin_email: admin.email,
+            action: "SETTLEMENTS_SYNC",
+            target_type: "paystack_settlements",
+            target_id: "sync",
+            details: { inserted, updated, total_fetched: settlements.length }
+        });
+
+        return {
+            message: `Settlement sync complete: ${inserted} new, ${updated} updated.`,
+            inserted,
+            updated,
+            total_fetched: settlements.length
+        };
+
+    }
+
+    /**
+     * Get stored settlements (paginated), most recent first.
+     */
+    static async getSettlements(query) {
+
+        const page = Number(query.page) || 1;
+        const limit = Number(query.limit) || 20;
+        const offset = (page - 1) * limit;
+
+        const result = await pool.query(
+            `SELECT * FROM paystack_settlements
+             ORDER BY settlement_date DESC NULLS LAST
+             LIMIT $1 OFFSET $2`,
+            [limit, offset]
+        );
+
+        const countResult = await pool.query(
+            `SELECT COUNT(*) FROM paystack_settlements`
+        );
+
+        return {
+            settlements: result.rows,
+            total: Number(countResult.rows[0].count),
+            page,
+            limit
         };
 
     }
