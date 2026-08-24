@@ -660,9 +660,19 @@ class AdminService {
                 throw new Error("Transaction not found.");
             }
 
-            if (transaction.status !== "successful") {
+                        if (transaction.status !== "successful") {
                 throw new Error(
                     "Only successful transactions can be reversed."
+                );
+            }
+
+            // Wallet-funding transactions are credits, not debits — this
+            // function's logic (add the amount back to the wallet) would
+            // double-credit the customer instead of undoing the funding.
+            // Use reverseWalletFunding() for those instead.
+            if (transaction.service === "WALLET_FUNDING") {
+                throw new Error(
+                    "Wallet funding transactions cannot be reversed here — use the settlement refund action instead."
                 );
             }
 
@@ -1533,6 +1543,137 @@ class AdminService {
             }
 
          };
+
+    }
+
+        /**
+     * Reverse a wallet-funding transaction — used when a Paystack payment
+     * is refunded or charged back. Unlike reverseTransaction() (which is
+     * for purchases and credits the wallet), this DEBITS the wallet since
+     * funding was itself a credit. Allowed to push the balance negative:
+     * if the customer already spent the money, that becomes a debt owed,
+     * not a reason to block a real external refund/chargeback from
+     * being reflected.
+     */
+    static async reverseWalletFunding(reference, admin) {
+
+        const client = await pool.connect();
+
+        try {
+
+            await client.query("BEGIN");
+
+            const transaction = await TransactionModel.getByReference(reference, client);
+
+            if (!transaction) {
+                throw new Error("Transaction not found.");
+            }
+
+            if (transaction.service !== "WALLET_FUNDING") {
+                throw new Error("This is not a wallet funding transaction — use the standard reverse action instead.");
+            }
+
+            if (transaction.status !== "successful") {
+                throw new Error("Only successful funding transactions can be reversed.");
+            }
+
+            const wallet = await WalletModel.findByUserId(transaction.user_id, client);
+
+            if (!wallet) {
+                throw new Error("Wallet not found.");
+            }
+
+            const lockedWallet = await WalletModel.lockWallet(wallet.id, client);
+
+            const balanceBefore = Number(lockedWallet.balance);
+            const balanceAfter = balanceBefore - Number(transaction.amount);
+
+            await WalletModel.updateBalance(wallet.id, balanceAfter, client);
+
+            const reversalReference = generateReference("FNDREV");
+
+            await WalletLedgerModel.create({
+                wallet_id: wallet.id,
+                type: "debit",
+                source: "ADMIN",
+                service: "FUNDING_REVERSAL",
+                amount: transaction.amount,
+                balance_before: balanceBefore,
+                balance_after: balanceAfter,
+                reference: reversalReference,
+                description: `Funding reversal of ${transaction.reference}`,
+                status: "successful"
+            }, client);
+
+            await TransactionModel.create({
+                user_id: transaction.user_id,
+                reference: reversalReference,
+                provider: "ADMIN",
+                service: "FUNDING_REVERSAL",
+                amount: transaction.amount,
+                status: "successful",
+                transaction_type: "REVERSAL",
+                narration: `Funding reversal of ${transaction.reference}`,
+                balance_after: balanceAfter,
+                api_response: { reversed_reference: transaction.reference }
+            }, client);
+
+            await TransactionModel.changeStatus(transaction.reference, "reversed", client);
+
+            const ledgerResult = await client.query(
+                `UPDATE paystack_fee_ledger
+                 SET refund_status = 'REFUNDED', refunded_at = now(), refund_reference = $1
+                 WHERE transaction_reference = $2 AND refund_status = 'NONE'
+                 RETURNING id`,
+                [reversalReference, transaction.reference]
+            );
+
+            if (ledgerResult.rowCount === 0) {
+                throw new Error("No matching Paystack fee ledger row found to mark as refunded (or it was already refunded).");
+            }
+
+            await AdminActionModel.log({
+                admin_id: admin.id,
+                admin_email: admin.email,
+                action: "WALLET_FUNDING_REVERSE",
+                target_type: "transaction",
+                target_id: transaction.reference,
+                details: {
+                    user_id: transaction.user_id,
+                    amount: transaction.amount,
+                    reversal_reference: reversalReference,
+                    balance_before: balanceBefore,
+                    balance_after: balanceAfter
+                }
+            }, client);
+
+            await NotificationService.notify({
+                user_id: transaction.user_id,
+                title: "⚠️ Wallet Funding Reversed",
+                message: `A payment of ₦${transaction.amount} was reversed and has been deducted from your wallet.`,
+                type: "FAILED",
+                category: "wallet"
+            });
+
+            await client.query("COMMIT");
+
+            return {
+                message: "Wallet funding reversed successfully.",
+                reversal_reference: reversalReference,
+                balance_before: balanceBefore,
+                balance_after: balanceAfter
+            };
+
+        } catch (error) {
+
+            await client.query("ROLLBACK");
+            throw error;
+
+        } finally {
+
+            client.release();
+
+        }
 
     }
 

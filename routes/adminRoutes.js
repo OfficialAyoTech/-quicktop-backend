@@ -375,6 +375,13 @@ router.get(
  * Paystack Settlement Tracking
  */
 router.post(
+    "/transactions/:reference/reverse-funding",
+    auth,
+    admin,
+    adminController.reverseWalletFunding
+);
+
+router.post(
     "/settlements/sync",
     auth,
     admin,

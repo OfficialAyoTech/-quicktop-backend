@@ -1229,6 +1229,25 @@ const getFinancialOverview = async (req, res) => {
 
 };
 
+const reverseWalletFunding = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.reverseWalletFunding(
+            req.params.reference,
+            req.user
+        );
+
+        return ApiResponse.success(res, result.message, result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
 const syncSettlements = async (req, res) => {
 
     try {
@@ -1278,6 +1297,7 @@ module.exports = {
     getTransactions,
     getTransaction,
     reverseTransaction,
+    reverseWalletFunding,
     getServiceStatuses,
     toggleService,
     syncDataPlans,
