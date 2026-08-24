@@ -114,19 +114,21 @@ static async findPendingByUser(userId, client = pool) {
 /**
  * Mark referral as completed
  */
-static async completeReferral(id, reward, client = pool) {
+static async completeReferral(id, reward, transactionReference, client = pool) {
 
     const result = await client.query(
         `
         UPDATE referrals
         SET
             reward = $1,
-            status = 'COMPLETED'
-        WHERE id = $2
+            status = 'COMPLETED',
+            transaction_reference = $2
+        WHERE id = $3
         RETURNING *;
         `,
         [
             reward,
+            transactionReference,
             id
         ]
     );

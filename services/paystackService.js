@@ -77,7 +77,7 @@ class PaystackService {
 
 }
 
-    /**
+        /**
      * List Settlements — fetches a page of settlement payouts from Paystack.
      * Used by the daily/manual settlement sync, not the customer-facing flow.
      */
@@ -99,6 +99,36 @@ class PaystackService {
             throw new Error(
                 error.response?.data?.message ||
                 "Unable to fetch settlements."
+            );
+
+        }
+
+    }
+
+    /**
+     * List Settlement Transactions — fetches the individual transactions
+     * that make up one settlement payout. Called on demand (not synced/
+     * stored) since this is a drill-down view, not something needed for
+     * every dashboard load.
+     */
+    static async listSettlementTransactions(settlementId) {
+
+        try {
+
+            const response = await api.get(
+                `/settlement/${settlementId}/transactions`
+            );
+
+            return response.data;
+
+        } catch (error) {
+
+            console.log("========== PAYSTACK SETTLEMENT TRANSACTIONS ERROR ==========");
+            console.log(error.response?.data || error.message);
+
+            throw new Error(
+                error.response?.data?.message ||
+                "Unable to fetch settlement transactions."
             );
 
         }

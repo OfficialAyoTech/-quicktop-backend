@@ -779,20 +779,42 @@ class AdminService {
                 [transaction.reference]
             );
 
-            if (profitReversalResult.rowCount === 1) {
+                    if (profitReversalResult.rowCount === 1) {
 
-                const { provider_cost: providerCost } = profitReversalResult.rows[0];
+            const { provider_cost: providerCost } = profitReversalResult.rows[0];
 
-                const capitalResult = await client.query(
-                    `UPDATE provider_accounts
-                     SET balance = balance + $1, updated_at = now()
-                     WHERE provider = 'CLUBKONNECT'
-                     RETURNING balance`,
-                    [providerCost]
-                );
+            // --- Reverse cashback, if this transaction had any ---
+            await client.query(
+                `UPDATE cashback_transactions
+                 SET status = 'REVERSED'
+                 WHERE source_reference = $1 AND status = 'ACTIVE'`,
+                [transaction.reference]
+            );
+
+            // --- Reverse referral bonus, if this transaction triggered one ---
+            await client.query(
+                `UPDATE referrals
+                 SET status = 'REVERSED'
+                 WHERE transaction_reference = $1 AND status = 'COMPLETED'`,
+                [transaction.reference]
+            );
+
+            // The transaction's own provider field tells us which capital
+            // account to credit back — was hardcoded to CLUBKONNECT before,
+            // which silently misattributed reversals for any other provider
+            // (e.g. WAEC/VTPASS) to the wrong balance.
+            const capitalProvider = transaction.provider === "VTpass" ? "VTPASS" : "CLUBKONNECT";
+
+            const capitalResult = await client.query(
+                `UPDATE provider_accounts
+                 SET balance = balance + $1, updated_at = now()
+                 WHERE provider = $2
+                 RETURNING balance`,
+                [providerCost, capitalProvider]
+            );
 
                 if (capitalResult.rows.length === 0) {
-                    throw new Error("provider_accounts row for CLUBKONNECT not found during reversal");
+                    throw new Error(`provider_accounts row for ${capitalProvider} not found during reversal`);
                 }
 
                 const capBalanceAfter = Number(capitalResult.rows[0].balance);
@@ -801,8 +823,9 @@ class AdminService {
                 await client.query(
                     `INSERT INTO provider_capital_ledger
                      (provider, type, amount, balance_before, balance_after, reference, transaction_reference, description, created_by)
-                     VALUES ('CLUBKONNECT', 'REVERSAL', $1, $2, $3, $4, $5, $6, $7)`,
+                     VALUES ($1, 'REVERSAL', $2, $3, $4, $5, $6, $7, $8)`,
                     [
+                        capitalProvider,
                         providerCost,
                         capBalanceBefore,
                         capBalanceAfter,
@@ -954,6 +977,42 @@ class AdminService {
             client.release();
 
         }
+
+    }
+
+        /**
+     * Preview a reconciliation — read-only comparison of the internally
+     * tracked (expected) balance against the real ClubKonnect dashboard
+     * balance the admin just checked. Writes nothing. The admin reviews
+     * this and only then calls reconcileProviderCapital() to actually
+     * apply the correction.
+     */
+    static async previewReconciliation(provider, actualBalance) {
+
+        if (actualBalance === undefined || actualBalance === null) {
+            throw new Error("actualBalance is required.");
+        }
+
+        const accountResult = await pool.query(
+            `SELECT balance FROM provider_accounts WHERE provider = $1`,
+            [provider]
+        );
+
+        if (accountResult.rows.length === 0) {
+            throw new Error(`Provider account not found: ${provider}`);
+        }
+
+        const expected = Number(accountResult.rows[0].balance);
+        const actual = Number(actualBalance);
+        const difference = Number((actual - expected).toFixed(2));
+
+        return {
+            provider,
+            expected_balance: expected,
+            actual_balance: actual,
+            difference,
+            status: difference === 0 ? "RECONCILED" : "REQUIRES_INVESTIGATION"
+        };
 
     }
 
@@ -1177,16 +1236,17 @@ class AdminService {
     static async getWithdrawableProfit() {
 
         const grossProfitResult = await pool.query(
-            `SELECT COALESCE(SUM(gross_profit), 0) AS total FROM provider_profit_ledger`
+            `SELECT COALESCE(SUM(gross_profit), 0) AS total FROM provider_profit_ledger WHERE status = 'ACTIVE'`
         );
 
-        const cashbackResult = await pool.query(
-            `SELECT COALESCE(SUM(cashback_amount), 0) AS total FROM cashback_transactions`
+                const cashbackResult = await pool.query(
+            `SELECT COALESCE(SUM(cashback_amount), 0) AS total FROM cashback_transactions
+             WHERE status = 'ACTIVE'`
         );
 
         const referralResult = await pool.query(
-            `SELECT COALESCE(SUM(amount), 0) AS total FROM wallet_ledger
-             WHERE source = 'REFERRAL' AND service = 'REFERRAL_BONUS'`
+            `SELECT COALESCE(SUM(reward), 0) AS total FROM referrals
+             WHERE status = 'COMPLETED'`
         );
 
         const expensesResult = await pool.query(
@@ -1412,48 +1472,56 @@ class AdminService {
 
         const { startDate, endDate } = this.getRangeStartDate(range, fromDate, toDate);
 
-        const dateParam = [];
+                const dateParam = [];
         let dateClause = "";
         let expenseDateClause = "";
+        let profitClause = "WHERE status = 'ACTIVE'";
 
         if (startDate && endDate) {
             dateParam.push(startDate, endDate);
             dateClause = "WHERE created_at >= $1 AND created_at < $2";
             expenseDateClause = "WHERE expense_date >= $1 AND expense_date < $2";
+            profitClause += " AND created_at >= $1 AND created_at < $2";
         } else if (startDate) {
             dateParam.push(startDate);
             dateClause = "WHERE created_at >= $1";
             expenseDateClause = "WHERE expense_date >= $1";
+            profitClause += " AND created_at >= $1";
         }
 
         // Profit by service
         const profitByServiceResult = await pool.query(
             `SELECT service, COALESCE(SUM(gross_profit), 0) AS total
              FROM provider_profit_ledger
-             ${dateClause}
+             ${profitClause}
              GROUP BY service`,
             dateParam
         );
 
         const grossProfitResult = await pool.query(
             `SELECT COALESCE(SUM(gross_profit), 0) AS total
-             FROM provider_profit_ledger ${dateClause}`,
+             FROM provider_profit_ledger ${profitClause}`,
             dateParam
         );
+
+                const cashbackDateCondition =
+            startDate && endDate ? "AND created_at >= $1 AND created_at < $2" :
+            startDate ? "AND created_at >= $1" : "";
 
         const cashbackResult = await pool.query(
             `SELECT COALESCE(SUM(cashback_amount), 0) AS total
-             FROM cashback_transactions ${dateClause}`,
+             FROM cashback_transactions
+             WHERE status = 'ACTIVE' ${cashbackDateCondition}`,
             dateParam
         );
 
-                const referralDateCondition =
+        const referralDateCondition =
             startDate && endDate ? "AND created_at >= $1 AND created_at < $2" :
             startDate ? "AND created_at >= $1" : "";
 
         const referralResult = await pool.query(
-            `SELECT COALESCE(SUM(amount), 0) AS total FROM wallet_ledger
-             WHERE source = 'REFERRAL' AND service = 'REFERRAL_BONUS'
+            `SELECT COALESCE(SUM(reward), 0) AS total FROM referrals
+             WHERE status = 'COMPLETED'
              ${referralDateCondition}`,
             dateParam
         );

@@ -1118,12 +1118,82 @@ static async purchaseWaec(userId, payload) {
 
             }
 
-            await TransactionModel.updateStatus(
+                        await TransactionModel.updateStatus(
                 reference,
                 delivered ? TRANSACTION_STATUS.SUCCESS : TRANSACTION_STATUS.PENDING,
                 response,
                 client
             );
+
+            // Record WAEC profit + deduct VTpass capital. Unlike ClubKonnect
+            // services, WAEC has no separate check()-based confirmation step —
+            // VTpass confirms synchronously right here, so this has to live
+            // inline rather than in ProviderProfitService. Runs on both
+            // delivered and pending, since money has left the business in
+            // both cases (only the earlier !delivered && !pending branch
+            // refunds). ON CONFLICT DO NOTHING + rowCount check gives this
+            // the same retry-safety recordProfit() has for ClubKonnect.
+            try {
+
+                const vtpassTotalAmount = response?.content?.transactions?.total_amount;
+
+                if (vtpassTotalAmount === undefined || vtpassTotalAmount === null) {
+                    console.error(`VTpass response missing total_amount — profit not recorded for ${reference}`);
+                } else {
+
+                    const providerCost = Number(vtpassTotalAmount);
+                    const grossProfit = Number((amount - providerCost).toFixed(2));
+
+                    const profitInsertResult = await client.query(
+                        `INSERT INTO provider_profit_ledger
+                         (transaction_reference, service, network, customer_amount, provider_cost, gross_profit)
+                         VALUES ($1, $2, $3, $4, $5, $6)
+                         ON CONFLICT (transaction_reference) DO NOTHING`,
+                        [reference, SERVICES.WAEC, null, amount, providerCost, grossProfit]
+                    );
+
+                    if (profitInsertResult.rowCount === 1) {
+
+                        const capitalResult = await client.query(
+                            `UPDATE provider_accounts
+                             SET balance = balance - $1, updated_at = now()
+                             WHERE provider = 'VTPASS'
+                             RETURNING balance`,
+                            [providerCost]
+                        );
+
+                        if (capitalResult.rows.length === 0) {
+                            console.error(`provider_accounts row for VTPASS not found — capital not deducted for ${reference}`);
+                        } else {
+
+                            const capBalanceAfter = Number(capitalResult.rows[0].balance);
+                            const capBalanceBefore = capBalanceAfter + providerCost;
+
+                            await client.query(
+                                `INSERT INTO provider_capital_ledger
+                                 (provider, type, amount, balance_before, balance_after, reference, transaction_reference, description, created_by)
+                                 VALUES ('VTPASS', 'DEDUCTION', $1, $2, $3, $4, $5, $6, NULL)`,
+                                [
+                                    providerCost,
+                                    capBalanceBefore,
+                                    capBalanceAfter,
+                                    generateReference("CAPDED"),
+                                    reference,
+                                    `Capital deduction for WAEC — ${reference}`
+                                ]
+                            );
+
+                        }
+
+                    }
+
+                }
+
+            } catch (profitError) {
+                // A ledger-write failure must never break the customer-facing
+                // WAEC purchase flow — log loudly, don't throw.
+                console.error("WAEC PROVIDER PROFIT/CAPITAL LEDGER WRITE FAILED:", reference, profitError);
+            }
 
             if (delivered) {
 

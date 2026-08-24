@@ -200,9 +200,10 @@ class TransactionStatusService {
             reward
         );
 
-        await ReferralModel.completeReferral(
+                await ReferralModel.completeReferral(
             referral.id,
-            reward
+            reward,
+            reference
         );
 
         await NotificationService.notify({

@@ -1091,6 +1091,25 @@ const topupProviderCapital = async (req, res) => {
 
 };
 
+const previewReconciliation = async (req, res) => {
+
+    try {
+
+        const result = await AdminService.previewReconciliation(
+            req.params.provider,
+            req.query.actual_balance
+        );
+
+        return ApiResponse.success(res, "Reconciliation preview generated.", result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
 const reconcileProviderCapital = async (req, res) => {
 
     try {
@@ -1314,6 +1333,7 @@ module.exports = {
     getLegalDocs,
     updateLegalDoc,
     topupProviderCapital,
+    previewReconciliation,
     reconcileProviderCapital,
     createExpense,
     getExpenses,

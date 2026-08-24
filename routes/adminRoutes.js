@@ -322,6 +322,13 @@ router.post(
     adminController.topupProviderCapital
 );
 
+router.get(
+    "/provider-accounts/:provider/reconcile-preview",
+    auth,
+    admin,
+    adminController.previewReconciliation
+);
+
 router.post(
     "/provider-accounts/:provider/reconcile",
     auth,
