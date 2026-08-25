@@ -104,14 +104,14 @@ class TransactionStatusService {
             // purchase — not on funding alone. Requiring the purchase to
             // be >= the reward amount prevents someone farming referrals
             // with a token 20-naira purchase for a 500-naira payout.
+                await ProviderProfitService.recordProfit(transaction);
+
                 const referralAwarded =
                 await this.maybeCompleteReferral(userId, transaction, reference);
 
             if (!referralAwarded) {
                 await this.maybeAwardCashback(userId, transaction, reference);
             }
-
-            await ProviderProfitService.recordProfit(transaction);
 
         }
 
@@ -230,13 +230,28 @@ class TransactionStatusService {
      * track margin (airtime, electricity) and for promotional plans, so
      * both cases are automatically skipped by the check below.
      */
-    static async maybeAwardCashback(userId, transaction, reference) {
+        static async maybeAwardCashback(userId, transaction, reference) {
+
+        let margin;
 
         if (transaction.margin === null || transaction.margin === undefined) {
-            return;
-        }
+            // No customer-facing markup tracked for this service (Airtime,
+            // Electricity) — fall back to the real ClubKonnect commission
+            // profit just recorded for this transaction, if any.
+            const profitResult = await pool.query(
+                `SELECT gross_profit FROM provider_profit_ledger
+                 WHERE transaction_reference = $1 AND status = 'ACTIVE'`,
+                [reference]
+            );
 
-        const margin = Number(transaction.margin);
+            if (profitResult.rows.length === 0) {
+                return;
+            }
+
+            margin = Number(profitResult.rows[0].gross_profit);
+        } else {
+            margin = Number(transaction.margin);
+        }
 
         if (margin <= 0) {
             return;
