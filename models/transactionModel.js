@@ -75,22 +75,26 @@ static async create(transaction, client = pool) {
 
 }
 
-    /**
-     * Find transaction by reference
-     */
-    static async findByReference(reference, client = pool) {
+/**
+ * Find transaction by reference
+ */
+static async findByReference(reference, client = pool) {
 
-        const result = await client.query(
-            `
-            SELECT *
-            FROM transactions
-            WHERE reference = $1
-            `,
-            [reference]
-        );
+    console.log(`[TX LOOKUP] ${reference} at ${Date.now()}`);
 
-        return result.rows[0];
-    }
+    const result = await client.query(
+        `
+        SELECT *
+        FROM transactions
+        WHERE reference = $1
+        `,
+        [reference]
+    );
+
+    console.log(`[TX LOOKUP RESULT] ${reference} found=${!!result.rows[0]}`);
+
+    return result.rows[0];
+}
 
 /**
  * Find transaction by reference and user

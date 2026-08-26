@@ -118,6 +118,8 @@ static async purchaseAirtime(userId, payload) {
             client
         );
 
+        console.log(`[TX CREATED] ${reference} at ${Date.now()}`);
+
         try {
 
             const response = await buyAirtime({
