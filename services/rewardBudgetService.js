@@ -155,12 +155,70 @@ class RewardBudgetService {
                 available_amount: Number(availableAfter.toFixed(2))
             };
 
-        } catch (error) {
+                } catch (error) {
             await client.query("ROLLBACK");
             throw error;
         } finally {
             client.release();
         }
+    }
+
+    /**
+     * Same as deduct(), but runs inside a transaction the caller already
+     * owns (no BEGIN/COMMIT/ROLLBACK of its own, no pool.connect()) — used
+     * by the coupon claim flow so budget deduction, wallet credit, and
+     * ledger write all succeed or fail together as one atomic operation.
+     * Still uses the same WHERE-guarded UPDATE, so a negative balance is
+     * still structurally impossible even inside a shared transaction.
+     */
+    static async deductWithClient(amount, transactionReference, description, client) {
+
+        if (!amount || Number(amount) <= 0) {
+            throw new Error("Deduction amount must be greater than 0");
+        }
+
+        const before = await client.query(
+            `SELECT allocated_amount, spent_amount FROM reward_budget LIMIT 1 FOR UPDATE`
+        );
+        const beforeRow = before.rows[0];
+        const availableBefore = Number(beforeRow.allocated_amount) - Number(beforeRow.spent_amount);
+
+        const updateResult = await client.query(
+            `UPDATE reward_budget
+             SET spent_amount = spent_amount + $1, updated_at = now()
+             WHERE (allocated_amount - spent_amount) >= $1
+             RETURNING allocated_amount, spent_amount`,
+            [amount]
+        );
+
+        if (updateResult.rowCount === 0) {
+            // Not enough available — caller's transaction handles the rollback.
+            return null;
+        }
+
+        const after = updateResult.rows[0];
+        const availableAfter = Number(after.allocated_amount) - Number(after.spent_amount);
+
+        await client.query(
+            `INSERT INTO reward_budget_ledger
+             (type, amount, balance_before, balance_after, reference, transaction_reference, description, created_by)
+             VALUES ('SPEND', $1, $2, $3, $4, $5, $6, NULL)`,
+            [
+                amount,
+                availableBefore,
+                availableAfter,
+                generateReference("RWDSPEND"),
+                transactionReference || null,
+                description || "Reward claim"
+            ]
+        );
+
+        return {
+            allocated_amount: Number(after.allocated_amount),
+            spent_amount: Number(after.spent_amount),
+            available_amount: Number(availableAfter.toFixed(2))
+        };
+
     }
 
     /**

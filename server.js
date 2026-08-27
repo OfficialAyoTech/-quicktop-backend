@@ -44,6 +44,7 @@ const kycRoutes = require("./routes/kycRoutes");
 const adminRoutes = require("./routes/adminRoutes");
 const waecRoutes = require("./routes/waecRoutes");
 const legalRoutes = require("./routes/legalRoutes");
+const promotionRoutes = require("./routes/promotionRoutes");
 
 const startTransactionWorker = require("./workers/transactionWorker");
 
@@ -129,6 +130,7 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/push", require("./routes/pushRoutes"));
 app.use("/api/waec", waecRoutes);
 app.use("/api/legal", legalRoutes);
+app.use("/api", promotionRoutes);
 
 // ===================================
 // Home
