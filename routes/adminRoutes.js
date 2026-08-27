@@ -402,4 +402,21 @@ router.get(
     adminController.getSettlements
 );
 
+/**
+ * Reward Budget (Marketing/Rewards Reserve)
+ */
+router.get(
+    "/reward-budget",
+    auth,
+    admin,
+    adminController.getRewardBudget
+);
+
+router.post(
+    "/reward-budget/allocate",
+    auth,
+    admin,
+    adminController.allocateRewardBudget
+);
+
 module.exports = router;

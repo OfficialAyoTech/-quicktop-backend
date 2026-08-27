@@ -1,0 +1,221 @@
+// backend/controllers/advertisementController.js
+const advertisementModel = require('../models/advertisementModel');
+const { uploadImageToFirebase } = require('../middleware/upload');
+
+function isValidDateRange(startDate, endDate) {
+  const s = new Date(startDate);
+  const e = new Date(endDate);
+  return !Number.isNaN(s.getTime()) && !Number.isNaN(e.getTime()) && e > s;
+}
+
+const advertisementController = {
+  // POST /api/admin/advertisements  (multipart/form-data if uploading an image file)
+  async create(req, res) {
+    try {
+      const {
+        title,
+        subtitle,
+        buttonText,
+        actionType,
+        actionValue,
+        linkedPromotionId,
+        startDate,
+        endDate,
+        displayOrder,
+        status,
+      } = req.body;
+
+      if (!title || !actionValue || !startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          message: 'title, actionValue, startDate and endDate are required.',
+        });
+      }
+
+      if (!isValidDateRange(startDate, endDate)) {
+        return res.status(400).json({ success: false, message: 'endDate must be after startDate.' });
+      }
+
+      // Image comes either as an uploaded file (req.file, via multer) or a
+      // pre-hosted imageUrl in the body — support both so the admin dashboard
+      // can either upload directly or paste a URL.
+      let imageUrl = req.body.imageUrl;
+      if (req.file) {
+        imageUrl = await uploadImageToFirebase(req.file);
+      }
+      if (!imageUrl) {
+        return res.status(400).json({ success: false, message: 'An image (file or imageUrl) is required.' });
+      }
+
+      const ad = await advertisementModel.create({
+        title,
+        subtitle,
+        imageUrl,
+        buttonText,
+        actionType,
+        actionValue,
+        linkedPromotionId,
+        startDate,
+        endDate,
+        displayOrder: displayOrder ? Number(displayOrder) : 0,
+        status,
+        createdBy: req.admin?.email || req.admin?.uid || null, // set by your admin auth middleware
+      });
+
+      return res.status(201).json({ success: true, data: ad });
+    } catch (err) {
+      console.error('Error creating advertisement:', err);
+      return res.status(500).json({ success: false, message: 'Failed to create advertisement.' });
+    }
+  },
+
+  // PUT /api/admin/advertisements/:id
+  async update(req, res) {
+    try {
+      const { id } = req.params;
+      const existing = await advertisementModel.findById(id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Advertisement not found.' });
+      }
+
+      const {
+        title,
+        subtitle,
+        buttonText,
+        actionType,
+        actionValue,
+        linkedPromotionId,
+        startDate,
+        endDate,
+        displayOrder,
+        status,
+        imageUrl,
+      } = req.body;
+
+      if (startDate && endDate && !isValidDateRange(startDate, endDate)) {
+        return res.status(400).json({ success: false, message: 'endDate must be after startDate.' });
+      }
+
+      let newImageUrl = imageUrl;
+      if (req.file) {
+        newImageUrl = await uploadImageToFirebase(req.file);
+      }
+
+      const updated = await advertisementModel.update(id, {
+        title,
+        subtitle,
+        buttonText,
+        actionType,
+        actionValue,
+        linkedPromotionId,
+        startDate,
+        endDate,
+        displayOrder: displayOrder !== undefined ? Number(displayOrder) : undefined,
+        status,
+        imageUrl: newImageUrl,
+      });
+
+      return res.json({ success: true, data: updated });
+    } catch (err) {
+      console.error('Error updating advertisement:', err);
+      return res.status(500).json({ success: false, message: 'Failed to update advertisement.' });
+    }
+  },
+
+  // PATCH /api/admin/advertisements/:id/status  { status: 'active' | 'inactive' }
+  async setStatus(req, res) {
+    try {
+      const { id } = req.params;
+      const { status } = req.body;
+      if (!['active', 'inactive'].includes(status)) {
+        return res.status(400).json({ success: false, message: "status must be 'active' or 'inactive'." });
+      }
+      const existing = await advertisementModel.findById(id);
+      if (!existing) {
+        return res.status(404).json({ success: false, message: 'Advertisement not found.' });
+      }
+      const updated = await advertisementModel.setStatus(id, status);
+      return res.json({ success: true, data: updated });
+    } catch (err) {
+      console.error('Error toggling advertisement status:', err);
+      return res.status(500).json({ success: false, message: 'Failed to update status.' });
+    }
+  },
+
+  // DELETE /api/admin/advertisements/:id
+  async remove(req, res) {
+    try {
+      const { id } = req.params;
+      const deleted = await advertisementModel.delete(id);
+      if (!deleted) {
+        return res.status(404).json({ success: false, message: 'Advertisement not found.' });
+      }
+      return res.json({ success: true, message: 'Advertisement deleted.' });
+    } catch (err) {
+      console.error('Error deleting advertisement:', err);
+      return res.status(500).json({ success: false, message: 'Failed to delete advertisement.' });
+    }
+  },
+
+  // GET /api/admin/advertisements?limit=&offset=
+  async listForAdmin(req, res) {
+    try {
+      const limit = req.query.limit ? Number(req.query.limit) : 50;
+      const offset = req.query.offset ? Number(req.query.offset) : 0;
+      const ads = await advertisementModel.findAllForAdmin({ limit, offset });
+      return res.json({ success: true, data: ads });
+    } catch (err) {
+      console.error('Error listing advertisements:', err);
+      return res.status(500).json({ success: false, message: 'Failed to list advertisements.' });
+    }
+  },
+
+  // GET /api/admin/advertisements/:id
+  async getById(req, res) {
+    try {
+      const ad = await advertisementModel.findById(req.params.id);
+      if (!ad) {
+        return res.status(404).json({ success: false, message: 'Advertisement not found.' });
+      }
+      return res.json({ success: true, data: ad });
+    } catch (err) {
+      console.error('Error fetching advertisement:', err);
+      return res.status(500).json({ success: false, message: 'Failed to fetch advertisement.' });
+    }
+  },
+
+  // GET /api/advertisements/active  (PUBLIC — used by the homepage carousel)
+  async listActiveForHomepage(req, res) {
+    try {
+      const ads = await advertisementModel.findActiveForHomepage();
+      return res.json({ success: true, data: ads });
+    } catch (err) {
+      console.error('Error fetching active advertisements:', err);
+      return res.status(500).json({ success: false, message: 'Failed to fetch advertisements.' });
+    }
+  },
+
+  // POST /api/advertisements/:id/impression  (PUBLIC — fire-and-forget from frontend)
+  async recordImpression(req, res) {
+    try {
+      await advertisementModel.incrementImpression(req.params.id);
+      return res.status(204).send();
+    } catch (err) {
+      console.error('Error recording impression:', err);
+      return res.status(500).json({ success: false, message: 'Failed to record impression.' });
+    }
+  },
+
+  // POST /api/advertisements/:id/click  (PUBLIC — fire-and-forget from frontend)
+  async recordClick(req, res) {
+    try {
+      await advertisementModel.incrementClick(req.params.id);
+      return res.status(204).send();
+    } catch (err) {
+      console.error('Error recording click:', err);
+      return res.status(500).json({ success: false, message: 'Failed to record click.' });
+    }
+  },
+};
+
+module.exports = advertisementController;

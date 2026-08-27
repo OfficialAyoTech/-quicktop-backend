@@ -3,6 +3,7 @@ const ApiResponse = require("../helpers/apiResponse");
 const ServiceStatusService = require("../services/serviceStatusService");
 const DataPlanSyncService = require("../services/dataPlanSyncService");
 const pool = require("../config/database");
+const RewardBudgetService = require("../services/rewardBudgetService");
 
 /**
  * Admin Dashboard
@@ -1299,6 +1300,42 @@ const getSettlements = async (req, res) => {
 
 };
 
+const getRewardBudget = async (req, res) => {
+
+    try {
+
+        const result = await RewardBudgetService.getBudget();
+
+        return ApiResponse.success(res, "Reward budget retrieved successfully.", result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
+const allocateRewardBudget = async (req, res) => {
+
+    try {
+
+        const result = await RewardBudgetService.allocate(
+            req.body.amount,
+            req.body.description,
+            req.user.id
+        );
+
+        return ApiResponse.success(res, "Reward budget allocated successfully.", result);
+
+    } catch (error) {
+
+        return ApiResponse.error(res, error.message, 400);
+
+    }
+
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
@@ -1342,5 +1379,7 @@ module.exports = {
     resolveWithdrawal,
     getFinancialOverview,
     syncSettlements,
-    getSettlements
+    getSettlements,
+    getRewardBudget,
+    allocateRewardBudget
 };
