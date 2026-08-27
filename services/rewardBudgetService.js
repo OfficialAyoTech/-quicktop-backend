@@ -1,7 +1,7 @@
 const pool = require("../config/database");
 const generateReference = require("../utils/referenceGenerator");
 
-class rewardBudgetService {
+class RewardBudgetService {
 
     /**
      * Returns the current state of the Marketing/Rewards Reserve.
