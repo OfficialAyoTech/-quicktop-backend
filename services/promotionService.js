@@ -135,17 +135,29 @@ class PromotionService {
 
     }
 
-    // Public/user-facing: only promotions currently inside their active window.
-    static async listActive() {
+        // Public/user-facing: only promotions currently inside their active window.
+    // Joins in how many times THIS user has already claimed each one, so the
+    // frontend can show a persistent "CLAIMED" state straight from the DB
+    // instead of a local flag that resets on refresh.
+    static async listActive(userId) {
 
         const result = await pool.query(
-            `SELECT id, name, description, reward_amount, min_transaction_amount,
-                    required_service, eligibility, start_date, expiry_date, linked_advertisement_id
-             FROM promotions
-             WHERE is_active = true
-               AND start_date <= now()
-               AND expiry_date >= now()
-             ORDER BY created_at DESC`
+            `SELECT p.id, p.name, p.description, p.reward_amount, p.min_transaction_amount,
+                    p.required_service, p.eligibility, p.start_date, p.expiry_date,
+                    p.linked_advertisement_id, p.max_claims_per_user,
+                    COALESCE(rl.claim_count, 0)::int AS claim_count
+             FROM promotions p
+             LEFT JOIN (
+                 SELECT promotion_id, COUNT(*)::int AS claim_count
+                 FROM reward_ledger
+                 WHERE user_id = $1 AND status = 'CREDITED'
+                 GROUP BY promotion_id
+             ) rl ON rl.promotion_id = p.id
+             WHERE p.is_active = true
+               AND p.start_date <= now()
+               AND p.expiry_date >= now()
+             ORDER BY p.created_at DESC`,
+            [userId]
         );
 
         return result.rows;

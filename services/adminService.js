@@ -1233,7 +1233,7 @@ class AdminService {
      * business expenses, and profit already withdrawn or reserved by a
      * pending withdrawal request.
      */
-    static async getWithdrawableProfit() {
+        static async getWithdrawableProfit() {
 
         const grossProfitResult = await pool.query(
             `SELECT COALESCE(SUM(gross_profit), 0) AS total FROM provider_profit_ledger WHERE status = 'ACTIVE'`
@@ -1258,14 +1258,25 @@ class AdminService {
              WHERE status IN ('PENDING', 'COMPLETED')`
         );
 
+        // Money allocated to the Reward/Marketing Budget is earmarked for
+        // coupon giveaways the moment it's allocated — even before anyone
+        // claims it — so it must be reserved out of withdrawable profit the
+        // same way a PENDING withdrawal already is above. Without this, the
+        // same profit naira could be both allocated to rewards AND withdrawn
+        // as cash, leaving claims backed by nothing.
+        const rewardBudgetResult = await pool.query(
+            `SELECT COALESCE(allocated_amount, 0) AS total FROM reward_budget LIMIT 1`
+        );
+
         const grossProfit = Number(grossProfitResult.rows[0].total);
         const cashback = Number(cashbackResult.rows[0].total);
         const referrals = Number(referralResult.rows[0].total);
         const expenses = Number(expensesResult.rows[0].total);
         const alreadyReservedOrWithdrawn = Number(withdrawnResult.rows[0].total);
+        const rewardBudgetAllocated = Number(rewardBudgetResult.rows[0]?.total || 0);
 
         const withdrawable = Number((
-            grossProfit - cashback - referrals - expenses - alreadyReservedOrWithdrawn
+            grossProfit - cashback - referrals - expenses - alreadyReservedOrWithdrawn - rewardBudgetAllocated
         ).toFixed(2));
 
         return {
@@ -1274,6 +1285,7 @@ class AdminService {
             referral_bonuses_paid: referrals,
             business_expenses: expenses,
             already_withdrawn_or_pending: alreadyReservedOrWithdrawn,
+            reward_budget_allocated: rewardBudgetAllocated,
             withdrawable_profit: withdrawable
         };
 

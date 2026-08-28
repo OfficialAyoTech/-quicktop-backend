@@ -81,7 +81,7 @@ const getClaimStatsAdmin = async (req, res) => {
 
 const listActivePromotions = async (req, res) => {
     try {
-        const result = await PromotionService.listActive();
+        const result = await PromotionService.listActive(req.user.id);
         return ApiResponse.success(res, "Active promotions retrieved successfully.", result);
     } catch (error) {
         return ApiResponse.error(res, error.message, 400);
