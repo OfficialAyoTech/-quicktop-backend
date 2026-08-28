@@ -27,6 +27,22 @@ const errorHandler = (err, req, res, next) => {
 
     }
 
+        // Multer (file upload) errors
+    if (err.name === "MulterError") {
+
+        const messages = {
+            LIMIT_FILE_SIZE: "Image is too large. Please upload a file under 2MB.",
+            LIMIT_UNEXPECTED_FILE: "Unexpected file field. Please check the upload form."
+        };
+
+        return ApiResponse.error(
+            res,
+            messages[err.code] || `Upload error: ${err.message}`,
+            400
+        );
+
+    }
+
     // PostgreSQL errors
     if (err.code) {
 

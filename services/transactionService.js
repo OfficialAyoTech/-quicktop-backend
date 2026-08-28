@@ -31,6 +31,7 @@ const notificationTemplates = require("../utils/notificationTemplates");
 const PinService = require("./pinService");
 const ServiceStatusService = require("./serviceStatusService");
 const { buyWaec } = require("./vtpassService");
+const RewardsService = require("./rewardsService");
 
 const {
     SERVICES,
@@ -635,7 +636,7 @@ static async purchaseElectricity(userId, payload) {
                     requestId: reference
                 });
 
-           if (response.status !== "ORDER_RECEIVED") {
+           if (response.transactionstatus !== "ORDER_RECEIVED") {
 
                 if (usingRewards) {
                     await RewardsService.creditWithClient(userId, amount, client);
