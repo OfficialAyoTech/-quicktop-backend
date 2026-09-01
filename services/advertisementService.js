@@ -142,15 +142,54 @@ class AdvertisementService {
 
     }
 
-    static async listForAdmin({ limit = 50, offset = 0 } = {}) {
+        static async listForAdmin({ limit = 50, offset = 0 } = {}) {
 
+        // Claims/rewards-distributed are attributed through the existing
+        // linked_promotion_id relationship — an ad with no linked coupon
+        // simply gets 0/null here, no attempt at click-to-purchase
+        // attribution (that would need session-linking this app doesn't have).
         const result = await pool.query(
-            `SELECT * FROM advertisements ORDER BY display_order ASC, created_at DESC LIMIT $1 OFFSET $2`,
+            `SELECT a.*,
+                    COALESCE(rl.claim_count, 0)::int AS claim_count,
+                    COALESCE(rl.rewards_distributed, 0) AS rewards_distributed
+             FROM advertisements a
+             LEFT JOIN (
+                 SELECT promotion_id, COUNT(*)::int AS claim_count, SUM(amount) AS rewards_distributed
+                 FROM reward_ledger
+                 WHERE status = 'CREDITED'
+                 GROUP BY promotion_id
+             ) rl ON rl.promotion_id = a.linked_promotion_id
+             ORDER BY a.display_order ASC, a.created_at DESC
+             LIMIT $1 OFFSET $2`,
             [limit, offset]
         );
 
         return result.rows.map(ad => this.attachStatus(ad));
 
+    }
+
+        static async incrementImpression(id) {
+        const result = await pool.query(
+            `UPDATE advertisements SET impression_count = impression_count + 1
+             WHERE id = $1 RETURNING impression_count`,
+            [id]
+        );
+        if (result.rows.length === 0) {
+            throw new Error("Advertisement not found.");
+        }
+        return result.rows[0];
+    }
+
+    static async incrementClick(id) {
+        const result = await pool.query(
+            `UPDATE advertisements SET click_count = click_count + 1
+             WHERE id = $1 RETURNING click_count`,
+            [id]
+        );
+        if (result.rows.length === 0) {
+            throw new Error("Advertisement not found.");
+        }
+        return result.rows[0];
     }
 
     // Public/homepage: only ads currently inside their active window.

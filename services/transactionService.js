@@ -12,6 +12,7 @@ const {
 } = require("./clubkonnectService");
 const WalletService = require("./walletService");
 const ProviderResponse = require("../helpers/providerResponse");
+const ProviderProfitService = require("./providerProfitService");
 const generateReference = require("../utils/referenceGenerator");
 const NETWORKS = require("../utils/networkCodes");
 const {
@@ -32,6 +33,7 @@ const PinService = require("./pinService");
 const ServiceStatusService = require("./serviceStatusService");
 const { buyWaec } = require("./vtpassService");
 const RewardsService = require("./rewardsService");
+const EricoDataService = require("./EricoDataService");
 
 const {
     SERVICES,
@@ -41,7 +43,7 @@ const {
 
 class TransactionService {
 
-    /**
+/**
  * Purchase Airtime
  */
 static async purchaseAirtime(userId, payload) {
@@ -262,7 +264,7 @@ static async purchaseAirtime(userId, payload) {
 
 }
 
-        /**
+/**
  * Purchase Data
  */
 static async purchaseData(userId, payload) {
@@ -291,9 +293,18 @@ static async purchaseData(userId, payload) {
     }
 
     const planResult = await pool.query(
-    `SELECT plan_id, plan_code, provider_plan_id, cost_price, sell_price, is_active, is_promotional
+    `SELECT
+        plan_id,
+        plan_code,
+        provider_plan_id,
+        provider,
+        cost_price,
+        sell_price,
+        is_active,
+        is_promotional
      FROM data_plans
-     WHERE network = $1 AND plan_code = $2`,
+     WHERE network = $1
+       AND plan_code = $2`,
     [network.toUpperCase(), plan]
 );
 
@@ -302,6 +313,10 @@ static async purchaseData(userId, payload) {
     if (!planRow || !planRow.is_active) {
         throw new BadRequestError("Invalid or unavailable data plan.");
     }
+
+    const provider = String(
+    planRow.provider || "CLUBKONNECT"
+).toUpperCase();
 
     const amount = Number(planRow.sell_price);
 
@@ -339,7 +354,7 @@ static async purchaseData(userId, payload) {
             {
                 user_id: userId,
                 reference,
-                provider: "ClubKonnect",
+                provider,
                 service: SERVICES.DATA,
                 phone,
                 amount,
@@ -356,12 +371,26 @@ static async purchaseData(userId, payload) {
 
         try {
 
-           const response = await buyData({
-    network: networkCode,
-    plan: planRow.provider_plan_id,
-    phone,
-    requestId: reference
-});
+           let response;
+
+if (provider === "ERICODATA") {
+
+    response = await EricoDataService.buyData({
+        network: network,
+        phone,
+        planId: planRow.provider_plan_id
+    });
+
+} else {
+
+    response = await buyData({
+        network: networkCode,
+        plan: planRow.provider_plan_id,
+        phone,
+        requestId: reference
+    });
+
+}
 
             if (response.status !== "ORDER_RECEIVED") {
 
@@ -412,42 +441,209 @@ static async purchaseData(userId, payload) {
                 };
             }
 
-            await TransactionModel.updateStatus(
-                reference,
-                TRANSACTION_STATUS.PENDING,
-                response,
+/**
+ * ERICODATA returns the final purchase result directly.
+ *
+ * Therefore we do NOT send ERICODATA transactions to
+ * TransactionStatusService.check(), because that checker
+ * currently queries ClubKonnect.
+ */
+if (provider === "ERICODATA") {
+
+    const ericoSuccess =
+        response?.success === true &&
+        String(response?.status || "").toLowerCase() === "successful";
+
+    if (!ericoSuccess) {
+
+        if (usingRewards) {
+
+            await RewardsService.creditWithClient(
+                userId,
+                amount,
                 client
             );
 
-            setImmediate(async () => {
-                try {
-                    await TransactionStatusService.check(
-                        reference,
-                        userId,
-                        amount
-                    );
-                } catch (error) {
-                    console.error("BACKGROUND CHECK FAILED:", error);
+        } else {
+
+            await WalletService.creditWithClient(
+                userId,
+                {
+                    amount,
+                    source: PAYMENT_SOURCES.REFUND,
+                    service: SERVICES.DATA,
+                    reference: `${reference}-REFUND`,
+                    description: "Refund for failed data purchase"
+                },
+                client
+            );
+
+        }
+
+        await TransactionModel.updateStatus(
+            reference,
+            TRANSACTION_STATUS.FAILED,
+            response,
+            client
+        );
+
+        await NotificationService.notify({
+            user_id: userId,
+            title: "❌ Data Purchase Failed",
+            message: `Your data purchase of ₦${amount} could not be completed. Your ${usingRewards ? "rewards balance" : "wallet"} has been refunded.`,
+            type: "FAILED",
+            category: "purchase",
+            metadata: {
+                reference,
+                amount,
+                service: SERVICES.DATA
+            }
+        });
+
+        return {
+            success: false,
+            reference,
+            message:
+                response?.message ||
+                "Data purchase failed. Your balance has been refunded."
+        };
+    }
+
+    /**
+     * ERICODATA PURCHASE SUCCESS
+     */
+    await TransactionModel.updateStatus(
+        reference,
+        TRANSACTION_STATUS.SUCCESS,
+        response,
+        client
+    );
+
+        // Profit recording, referral/cashback, and the success notification all
+    // open their own DB connection independent of this transaction's
+    // `client` — deferred to setImmediate (same pattern already used for
+    // the ClubKonnect flow below) so they only run AFTER this transaction
+    // has committed. Running them synchronously here — inside the still-open
+    // transaction — risked a partial rollback: if any of this threw, the
+    // wallet debit and transaction row would roll back while
+    // recordProfit()'s separate connection had already permanently
+    // committed the capital deduction. Never throws outward — a failure
+    // here must not turn an already-successful purchase into a FAILED one.
+    setImmediate(async () => {
+        try {
+            const transactionForRewards = {
+                user_id: userId,
+                reference,
+                provider,
+                service: SERVICES.DATA,
+                phone,
+                amount,
+                network,
+                margin,
+                provider_cost: providerCost
+            };
+
+            await ProviderProfitService.recordProfit(transactionForRewards);
+
+            const referralAwarded =
+                await TransactionStatusService.maybeCompleteReferral(
+                    userId,
+                    transactionForRewards,
+                    reference
+                );
+
+            if (!referralAwarded) {
+                await TransactionStatusService.maybeAwardCashback(
+                    userId,
+                    transactionForRewards,
+                    reference
+                );
+            }
+
+            const notification =
+                TransactionStatusService.getNotification(
+                    transactionForRewards,
+                    "SUCCESS"
+                );
+
+            await NotificationService.notify({
+                user_id: userId,
+                title: notification.title,
+                message: notification.message,
+                type: "SUCCESS",
+                category: "purchase",
+                metadata: {
+                    reference,
+                    amount,
+                    service: SERVICES.DATA
                 }
             });
+        } catch (error) {
+            console.error("ERICODATA POST-SUCCESS BACKGROUND WORK FAILED:", reference, error);
+        }
+    });
 
-            return {
-                success: true,
-                message: "Your transaction is being processed.",
-                reference,
-                wallet: {
-                    balance: updatedBalance.balance
-                },
-                response: ProviderResponse.data(
-                    {
-                        network,
-                        phone,
-                        plan
-                    },
-                    response,
-                    reference
-                )
-            };
+    return {
+        success: true,
+        message: "Data purchase successful.",
+        reference,
+        wallet: {
+            balance: updatedBalance.balance
+        },
+        response: ProviderResponse.data(
+            {
+                network,
+                phone,
+                plan
+            },
+            response,
+            reference
+        )
+    };
+}
+
+/**
+ * CLUBKONNECT FLOW
+ *
+ * Keep the existing pending + background status-check
+ * behavior exactly as it was.
+ */
+await TransactionModel.updateStatus(
+    reference,
+    TRANSACTION_STATUS.PENDING,
+    response,
+    client
+);
+
+setImmediate(async () => {
+    try {
+        await TransactionStatusService.check(
+            reference,
+            userId,
+            amount
+        );
+    } catch (error) {
+        console.error("BACKGROUND CHECK FAILED:", error);
+    }
+});
+
+return {
+    success: true,
+    message: "Your transaction is being processed.",
+    reference,
+    wallet: {
+        balance: updatedBalance.balance
+    },
+    response: ProviderResponse.data(
+        {
+            network,
+            phone,
+            plan
+        },
+        response,
+        reference
+    )
+};
 
         } catch (error) {
 

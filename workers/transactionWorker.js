@@ -16,7 +16,7 @@ function startTransactionWorker() {
 
         }
 
-    }, 300000);  // every 5 minutes, instead of 20 seconds
+    }, 1200000); // 20 minutes
 
 }
 

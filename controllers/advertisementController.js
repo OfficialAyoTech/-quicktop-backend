@@ -98,7 +98,26 @@ const listActiveAdvertisements = async (req, res) => {
     }
 };
 
+const trackAdvertisementImpression = async (req, res) => {
+    try {
+        const result = await AdvertisementService.incrementImpression(req.params.id);
+        return ApiResponse.success(res, "Impression recorded.", result);
+    } catch (error) {
+        return ApiResponse.error(res, error.message, 400);
+    }
+};
+
+const trackAdvertisementClick = async (req, res) => {
+    try {
+        const result = await AdvertisementService.incrementClick(req.params.id);
+        return ApiResponse.success(res, "Click recorded.", result);
+    } catch (error) {
+        return ApiResponse.error(res, error.message, 400);
+    }
+};
+
 module.exports = {
     createAdvertisement, updateAdvertisement, toggleAdvertisementActive, deleteAdvertisement,
-    getAdvertisementsAdmin, getAdvertisementByIdAdmin, listActiveAdvertisements
+    getAdvertisementsAdmin, getAdvertisementByIdAdmin, listActiveAdvertisements,
+    trackAdvertisementImpression, trackAdvertisementClick
 };

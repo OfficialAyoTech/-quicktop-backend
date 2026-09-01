@@ -9,7 +9,8 @@ exports.buyData = asyncHandler(async (req, res) => {
         phone,
         plan,
         amount,
-        pin
+        pin,
+        payment_source
     } = req.body;
 
     const result = await TransactionService.purchaseData(
@@ -19,7 +20,8 @@ exports.buyData = asyncHandler(async (req, res) => {
             phone,
             plan,
             amount,
-            pin
+            pin,
+            payment_source
         }
     );
 

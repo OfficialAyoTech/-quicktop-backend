@@ -275,6 +275,20 @@ router.patch(
 );
 
 router.patch(
+    "/data-plans/:id/active",
+    auth,
+    admin,
+    adminController.updateDataPlanActive
+);
+
+router.post(
+    "/data-plans/sync-ericodata",
+    auth,
+    admin,
+    adminController.syncEricoDataPlans
+);
+
+router.patch(
     "/cable-packages/:id/promotional",
     auth,
     admin,

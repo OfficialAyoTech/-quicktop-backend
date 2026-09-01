@@ -21,5 +21,7 @@ router.delete("/admin/advertisements/:id", auth, admin, advertisementController.
  * PUBLIC / USER-FACING — Homepage Carousel
  */
 router.get("/advertisements/active", auth, advertisementController.listActiveAdvertisements);
+router.post("/advertisements/:id/impression", auth, advertisementController.trackAdvertisementImpression);
+router.post("/advertisements/:id/click", auth, advertisementController.trackAdvertisementClick);
 
 module.exports = router;

@@ -6,8 +6,12 @@ const getPlans = async (req, res) => {
     try {
 
         const { network } = req.params;
+const { provider } = req.query;
 
-        const plans = await DataPlansService.getPlans(network);
+const plans = await DataPlansService.getPlans(
+    network,
+    provider
+);
 
         return ApiResponse.success(
             res,

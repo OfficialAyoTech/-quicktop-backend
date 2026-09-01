@@ -2,6 +2,7 @@ const AdminService = require("../services/adminService");
 const ApiResponse = require("../helpers/apiResponse");
 const ServiceStatusService = require("../services/serviceStatusService");
 const DataPlanSyncService = require("../services/dataPlanSyncService");
+const EricoDataPlanSyncService = require("../services/EricoDataPlanSyncService");
 const pool = require("../config/database");
 const RewardBudgetService = require("../services/rewardBudgetService");
 
@@ -594,6 +595,52 @@ const syncDataPlans = async (req, res) => {
 };
 
 /**
+ * Sync data plans from EricoData. Loops all 4 networks and aggregates the
+ * result. Each network is wrapped individually so one network failing
+ * (e.g. a temporary EricoData timeout) doesn't abort the other three —
+ * partial success is reported back rather than an all-or-nothing failure.
+ */
+const syncEricoDataPlans = async (req, res) => {
+
+    const networks = ["mtn", "airtel", "glo", "9mobile"];
+    const results = [];
+    const errors = [];
+
+    for (const network of networks) {
+        try {
+            const result = await EricoDataPlanSyncService.syncNetwork(network);
+            results.push(result);
+        } catch (error) {
+            console.error(`ERICODATA SYNC FAILED for ${network}:`, error.message);
+            errors.push({ network, error: error.message });
+        }
+    }
+
+    const totalInserted = results.reduce((sum, r) => sum + r.inserted, 0);
+    const totalUpdated = results.reduce((sum, r) => sum + r.updated, 0);
+
+    if (results.length === 0) {
+        return ApiResponse.error(
+            res,
+            "EricoData sync failed for all networks. " + errors.map(e => `${e.network}: ${e.error}`).join("; "),
+            400
+        );
+    }
+
+    let message = `Sync complete: ${totalInserted} new plans added, ${totalUpdated} existing plans updated.`;
+    if (errors.length > 0) {
+        message += ` Warning — failed for: ${errors.map(e => e.network).join(", ")}.`;
+    }
+
+    return ApiResponse.success(
+        res,
+        message,
+        { results, errors }
+    );
+
+};
+
+/**
  * Get all data plans with cost/sell/margin
  */
 const getDataPlansAdmin = async (req, res) => {
@@ -601,9 +648,9 @@ const getDataPlansAdmin = async (req, res) => {
     try {
 
         // getDataPlansAdmin — add is_promotional to the column list
-const result = await pool.query(
+        const result = await pool.query(
     `SELECT id, network, plan_id, plan_code, plan_name,
-            cost_price, sell_price,
+            provider, cost_price, sell_price,
             (sell_price - cost_price) AS margin,
             is_active, is_promotional
      FROM data_plans
@@ -856,6 +903,50 @@ const updateDataPlanPromo = async (req, res) => {
         return ApiResponse.success(
             res,
             "Promotional flag updated successfully.",
+            result.rows[0]
+        );
+
+    } catch (error) {
+
+        return ApiResponse.error(
+            res,
+            error.message,
+            400
+        );
+
+    }
+
+};
+
+/**
+ * Toggle a data plan's active flag — this is how an admin deactivates a
+ * ClubKonnect plan once an equivalent, cheaper EricoData plan exists,
+ * or reactivates one later. Deliberately manual/one-at-a-time: auto-matching
+ * "equivalent" plans by name across providers is unreliable, so the admin
+ * reviews and clicks per plan rather than the system guessing.
+ */
+const updateDataPlanActive = async (req, res) => {
+
+    try {
+
+        const { id } = req.params;
+        const { is_active } = req.body;
+
+        const result = await pool.query(
+            `UPDATE data_plans
+             SET is_active = $1, updated_at = now()
+             WHERE id = $2
+             RETURNING *`,
+            [Boolean(is_active), id]
+        );
+
+        if (result.rows.length === 0) {
+            throw new Error("Data plan not found.");
+        }
+
+        return ApiResponse.success(
+            res,
+            "Active status updated successfully.",
             result.rows[0]
         );
 
@@ -1366,6 +1457,8 @@ module.exports = {
     getCashbackRates,
     updateCashbackRate,
     updateDataPlanPromo,
+    updateDataPlanActive,
+    syncEricoDataPlans,
     updateCablePackagePromo,
     getLegalDocs,
     updateLegalDoc,

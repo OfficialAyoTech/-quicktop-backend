@@ -6,6 +6,7 @@ const ReferralModel = require("../models/referralModel");
 const UserModel = require("../models/userModel");
 const pool = require("../config/database");
 const ProviderProfitService = require("./providerProfitService");
+const RewardBudgetService = require("./rewardBudgetService");
 
 const {
     queryTransaction
@@ -200,11 +201,29 @@ class TransactionStatusService {
             reward
         );
 
-                await ReferralModel.completeReferral(
+        await ReferralModel.completeReferral(
             referral.id,
             reward,
             reference
         );
+
+        // Reserve this payout against the Reward Budget for accounting
+        // visibility (Overview dashboard, withdrawable profit) only.
+        // Refer & Earn is a core always-on feature, not a limited-time
+        // promo — the payout above has already happened and must never
+        // be blocked or rolled back by this. Deliberately best-effort.
+        try {
+            const budgetResult = await RewardBudgetService.deduct(
+                reward,
+                `REF-${reference}`,
+                `Referral bonus payout (referral #${referral.id})`
+            );
+            if (!budgetResult) {
+                console.warn(`Reward Budget insufficient to cover referral bonus for referral #${referral.id} — payout still made, budget accounting now shows a shortfall.`);
+            }
+        } catch (budgetError) {
+            console.error("Reward Budget accounting failed for referral bonus (payout unaffected):", budgetError);
+        }
 
         await NotificationService.notify({
             user_id: referral.referrer_id,
@@ -290,7 +309,7 @@ class TransactionStatusService {
             [userId, cashbackAmount]
         );
 
-        await pool.query(
+                await pool.query(
             `INSERT INTO cashback_transactions
              (user_id, source_reference, service, purchase_amount, margin, rate_percent, cashback_amount)
              VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -304,6 +323,22 @@ class TransactionStatusService {
                 cashbackAmount
             ]
         );
+
+        // Same as referral bonuses above: reserve against Reward Budget for
+        // accounting visibility only, never blocking or reversing the
+        // cashback that's already been credited.
+        try {
+            const budgetResult = await RewardBudgetService.deduct(
+                cashbackAmount,
+                reference,
+                `Service cashback (${transaction.service})`
+            );
+            if (!budgetResult) {
+                console.warn(`Reward Budget insufficient to cover cashback for ${reference} — payout still made, budget accounting now shows a shortfall.`);
+            }
+        } catch (budgetError) {
+            console.error("Reward Budget accounting failed for cashback (payout unaffected):", budgetError);
+        }
 
         await NotificationService.notify({
             user_id: userId,

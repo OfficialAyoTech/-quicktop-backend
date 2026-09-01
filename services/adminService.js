@@ -9,6 +9,7 @@ const WalletModel = require("../models/walletModel");
 const WalletLedgerModel = require("../models/walletLedgerModel");
 const TransactionModel = require("../models/transactionModel");
 const generateReference = require("../utils/referenceGenerator");
+const RewardBudgetService = require("./rewardBudgetService");
 
 class AdminService {
 
@@ -784,18 +785,20 @@ class AdminService {
             const { provider_cost: providerCost } = profitReversalResult.rows[0];
 
             // --- Reverse cashback, if this transaction had any ---
-            await client.query(
+            const cashbackReversalResult = await client.query(
                 `UPDATE cashback_transactions
                  SET status = 'REVERSED'
-                 WHERE source_reference = $1 AND status = 'ACTIVE'`,
+                 WHERE source_reference = $1 AND status = 'ACTIVE'
+                 RETURNING cashback_amount`,
                 [transaction.reference]
             );
 
             // --- Reverse referral bonus, if this transaction triggered one ---
-            await client.query(
+            const referralReversalResult = await client.query(
                 `UPDATE referrals
                  SET status = 'REVERSED'
-                 WHERE transaction_reference = $1 AND status = 'COMPLETED'`,
+                 WHERE transaction_reference = $1 AND status = 'COMPLETED'
+                 RETURNING reward, id`,
                 [transaction.reference]
             );
 
@@ -836,6 +839,36 @@ class AdminService {
                     ]
                 );
 
+            }
+
+            // Free up Reward Budget for any cashback/referral this
+            // transaction had — mirrors capital reversal above, same
+            // best-effort/non-blocking philosophy as the deduct() calls
+            // in TransactionStatusService (a budget-accounting hiccup here
+            // must never abort the transaction reversal itself, since the
+            // customer's wallet refund already happened above).
+            if (cashbackReversalResult.rowCount === 1) {
+                try {
+                    await RewardBudgetService.reverse(
+                        Number(cashbackReversalResult.rows[0].cashback_amount),
+                        transaction.reference,
+                        `Cashback reversal for ${transaction.reference}`
+                    );
+                } catch (budgetError) {
+                    console.error("Reward Budget reversal failed for cashback (transaction reversal unaffected):", budgetError);
+                }
+            }
+
+            if (referralReversalResult.rowCount === 1) {
+                try {
+                    await RewardBudgetService.reverse(
+                        Number(referralReversalResult.rows[0].reward),
+                        `REF-${transaction.reference}`,
+                        `Referral bonus reversal (referral #${referralReversalResult.rows[0].id})`
+                    );
+                } catch (budgetError) {
+                    console.error("Reward Budget reversal failed for referral bonus (transaction reversal unaffected):", budgetError);
+                }
             }
 
             await AdminActionModel.log({
