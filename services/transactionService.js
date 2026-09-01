@@ -378,7 +378,8 @@ if (provider === "ERICODATA") {
     response = await EricoDataService.buyData({
         network: network,
         phone,
-        planId: planRow.provider_plan_id
+        planId: planRow.provider_plan_id,
+        amount: providerCost
     });
 
 } else {

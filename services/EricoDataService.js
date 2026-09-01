@@ -34,13 +34,14 @@ class EricoDataService {
   /**
    * Purchase data
    */
-  async buyData({ network, phone, planId }) {
+    async buyData({ network, phone, planId, amount }) {
     try {
       const response = await this.client.post("/order", {
         service: "data",
         network: network.toLowerCase(),
         phone,
         plan_id: Number(planId),
+        amount: Number(amount),
       });
 
       return response.data;
