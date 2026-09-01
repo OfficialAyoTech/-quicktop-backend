@@ -2,7 +2,7 @@ const AdminService = require("../services/adminService");
 const ApiResponse = require("../helpers/apiResponse");
 const ServiceStatusService = require("../services/serviceStatusService");
 const DataPlanSyncService = require("../services/dataPlanSyncService");
-const EricoDataPlanSyncService = require("../services/EricoDataPlanSyncService");
+const EricoDataPlanSyncService = require("../services/ericoDataPlanSyncService");
 const pool = require("../config/database");
 const RewardBudgetService = require("../services/rewardBudgetService");
 
