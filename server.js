@@ -133,6 +133,7 @@ app.use("/api/waec", waecRoutes);
 app.use("/api/legal", legalRoutes);
 app.use("/api", promotionRoutes);
 app.use("/api", advertisementRoutes);
+app.use('/api/settings', require('./routes/settingsRoutes'));
 
 // ===================================
 // Home

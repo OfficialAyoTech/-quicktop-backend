@@ -1427,6 +1427,33 @@ const allocateRewardBudget = async (req, res) => {
 
 };
 
+const SettingsService = require("../services/settingsService");
+
+const getSettings = async (req, res) => {
+    try {
+        const settings = await SettingsService.getAllSettings();
+        res.json({ success: true, data: settings });
+    } catch (error) {
+        console.error("getSettings()", error);
+        res.status(500).json({ success: false, message: error.message || "Could not load settings" });
+    }
+};
+
+const updateSettings = async (req, res) => {
+    try {
+        const updates = req.body || {};
+        if (!Object.keys(updates).length) {
+            return res.status(400).json({ success: false, message: "No settings provided" });
+        }
+        await SettingsService.updateManySettings(updates);
+        const settings = await SettingsService.getAllSettings();
+        res.json({ success: true, data: settings });
+    } catch (error) {
+        console.error("updateSettings()", error);
+        res.status(500).json({ success: false, message: error.message || "Could not update settings" });
+    }
+};
+
 module.exports = {
     getDashboard,
     getAllKyc,
@@ -1474,5 +1501,7 @@ module.exports = {
     syncSettlements,
     getSettlements,
     getRewardBudget,
-    allocateRewardBudget
+    allocateRewardBudget,
+    getSettings,
+    updateSettings
 };

@@ -67,10 +67,6 @@ class PinService {
             );
         }
 
-        console.log("========== VERIFY PIN ==========");
-console.log("PIN:", pin);
-console.log("HASH:", user.transaction_pin);
-
         const valid =
             await bcrypt.compare(
                 pin,

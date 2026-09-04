@@ -433,4 +433,21 @@ router.post(
     adminController.allocateRewardBudget
 );
 
+/**
+ * App Settings Management
+ */
+router.get(
+    "/settings",
+    auth,
+    admin,
+    adminController.getSettings
+);
+
+router.patch(
+    "/settings",
+    auth,
+    admin,
+    adminController.updateSettings
+);
+
 module.exports = router;
