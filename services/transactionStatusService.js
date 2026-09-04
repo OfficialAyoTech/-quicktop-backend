@@ -7,6 +7,7 @@ const UserModel = require("../models/userModel");
 const pool = require("../config/database");
 const ProviderProfitService = require("./providerProfitService");
 const RewardBudgetService = require("./rewardBudgetService");
+const SettingsService = require("./settingsService");
 
 const {
     queryTransaction
@@ -17,8 +18,6 @@ const {
     PAYMENT_SOURCES,
     SERVICES
 } = require("../utils/constants");
-
-const MIN_REFERRAL_QUALIFYING_AMOUNT = 500;
 
 class TransactionStatusService {
 
@@ -163,9 +162,12 @@ class TransactionStatusService {
      * Complete a pending referral if this user just completed their
      * first successful purchase of at least MIN_REFERRAL_QUALIFYING_AMOUNT.
      */
-        static async maybeCompleteReferral(userId, transaction, reference) {
+    static async maybeCompleteReferral(userId, transaction, reference) {
 
-        if (Number(transaction.amount) < MIN_REFERRAL_QUALIFYING_AMOUNT) {
+        const settings = await SettingsService.getAllSettings();
+        const referralBonus = Number(settings.referral_bonus || 500);
+
+        if (Number(transaction.amount) < referralBonus) {
             return false;
         }
 
@@ -183,7 +185,7 @@ class TransactionStatusService {
             return false;
         }
 
-        const reward = 500;
+        const reward = referralBonus;
 
         await WalletService.credit(
             referral.referrer_id,

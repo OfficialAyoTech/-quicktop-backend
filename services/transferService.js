@@ -5,7 +5,7 @@ const TransactionModel = require("../models/transactionModel");
 const generateReference = require("../utils/referenceGenerator");
 const NotFoundError = require("../errors/NotFoundError");
 const BadRequestError = require("../errors/BadRequestError");
-const { SERVICES } = require("../utils/constants");
+const { SERVICES, PAYMENT_SOURCES, TRANSACTION_STATUS } = require("../utils/constants");
 
 class TransferService {
 
@@ -46,7 +46,7 @@ class TransferService {
                 senderId,
                 {
                     amount,
-                    PAYMENT_SOURCES.WALLET
+                    source: PAYMENT_SOURCES.WALLET,
                     service: SERVICES.TRANSFER,
                     reference: `${reference}-OUT`,
                     description: narration || "Wallet transfer"
@@ -59,7 +59,7 @@ class TransferService {
                 recipient.id,
                 {
                     amount,
-                    source: "TRANSFER",
+                    source: PAYMENT_SOURCES.TRANSFER,
                     service: SERVICES.TRANSFER,
                     reference: `${reference}-IN`,
                     description: narration || "Wallet transfer"
