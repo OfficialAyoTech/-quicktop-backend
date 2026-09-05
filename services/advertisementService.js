@@ -19,7 +19,8 @@ class AdvertisementService {
         const {
             title, subtitle, button_text, button_action,
             display_order, start_date, expiry_date,
-            linked_promotion_id, is_active
+            linked_promotion_id, is_active,
+            inactive_days, target_network
         } = payload;
 
         if (!title || !imageUrl || !start_date || !expiry_date) {
@@ -33,8 +34,9 @@ class AdvertisementService {
         const result = await pool.query(
             `INSERT INTO advertisements
              (title, subtitle, image_url, button_text, button_action, display_order,
-              start_date, expiry_date, linked_promotion_id, is_active, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
+              start_date, expiry_date, linked_promotion_id, is_active, created_by,
+              inactive_days, target_network)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
              RETURNING *`,
             [
                 title, subtitle || null, imageUrl,
@@ -43,7 +45,9 @@ class AdvertisementService {
                 start_date, expiry_date,
                 linked_promotion_id ? Number(linked_promotion_id) : null,
                 is_active === undefined ? true : (is_active === "false" ? false : Boolean(is_active)),
-                adminEmail || null
+                adminEmail || null,
+                inactive_days ? Number(inactive_days) : null,
+                target_network ? String(target_network).toUpperCase() : null
             ]
         );
 
@@ -57,7 +61,8 @@ class AdvertisementService {
             title: "title", subtitle: "subtitle", button_text: "button_text",
             button_action: "button_action", display_order: "display_order",
             start_date: "start_date", expiry_date: "expiry_date",
-            linked_promotion_id: "linked_promotion_id"
+            linked_promotion_id: "linked_promotion_id",
+            inactive_days: "inactive_days", target_network: "target_network"
         };
 
         const setClauses = [];
@@ -69,6 +74,8 @@ class AdvertisementService {
                 let v = fields[key];
                 if (key === "display_order") v = Number(v);
                 if (key === "linked_promotion_id") v = v ? Number(v) : null;
+                if (key === "inactive_days") v = (v === "" || v === null) ? null : Number(v);
+                if (key === "target_network") v = v ? String(v).toUpperCase() : null;
                 setClauses.push(`${column} = $${i}`);
                 values.push(v);
                 i += 1;
@@ -192,16 +199,30 @@ class AdvertisementService {
         return result.rows[0];
     }
 
-    // Public/homepage: only ads currently inside their active window.
-    static async listActive() {
+    // Public/homepage: only ads currently inside their active window AND
+    // matching this user's targeting (inactive_days / target_network, both
+    // optional — null means "no restriction, show to everyone" as before).
+    static async listActive(userId) {
 
         const result = await pool.query(
-            `SELECT id, title, subtitle, image_url, button_text, button_action, linked_promotion_id
-             FROM advertisements
-             WHERE is_active = true
-               AND start_date <= now()
-               AND expiry_date >= now()
-             ORDER BY display_order ASC, created_at DESC`
+            `SELECT a.id, a.title, a.subtitle, a.image_url, a.button_text, a.button_action, a.linked_promotion_id
+             FROM advertisements a
+             LEFT JOIN LATERAL (
+                 SELECT network AS last_network, created_at AS last_success_at
+                 FROM transactions t
+                 WHERE t.user_id = $1 AND t.status = 'successful'
+                 ORDER BY t.created_at DESC
+                 LIMIT 1
+             ) ut ON true
+             WHERE a.is_active = true
+               AND a.start_date <= now()
+               AND a.expiry_date >= now()
+               AND (a.inactive_days IS NULL
+                    OR ut.last_success_at IS NULL
+                    OR ut.last_success_at < now() - (a.inactive_days || ' days')::interval)
+               AND (a.target_network IS NULL OR a.target_network = ut.last_network)
+             ORDER BY a.display_order ASC, a.created_at DESC`,
+            [userId]
         );
 
         return result.rows;

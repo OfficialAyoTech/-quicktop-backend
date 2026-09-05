@@ -91,7 +91,7 @@ const getAdvertisementByIdAdmin = async (req, res) => {
 
 const listActiveAdvertisements = async (req, res) => {
     try {
-        const result = await AdvertisementService.listActive();
+        const result = await AdvertisementService.listActive(req.user.id);
         return ApiResponse.success(res, "Active advertisements retrieved successfully.", result);
     } catch (error) {
         return ApiResponse.error(res, error.message, 400);

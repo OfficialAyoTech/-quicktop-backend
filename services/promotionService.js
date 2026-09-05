@@ -8,7 +8,8 @@ class PromotionService {
             name, description, reward_amount, reward_type,
             max_claims, max_claims_per_user, start_date, expiry_date,
             min_transaction_amount, required_service, eligibility,
-            coupon_code, linked_advertisement_id, is_active
+            coupon_code, linked_advertisement_id, is_active,
+            inactive_days, target_network
         } = payload;
 
         if (!name || !reward_amount || !start_date || !expiry_date) {
@@ -23,8 +24,9 @@ class PromotionService {
             `INSERT INTO promotions
              (name, description, reward_amount, reward_type, max_claims, max_claims_per_user,
               start_date, expiry_date, min_transaction_amount, required_service, eligibility,
-              coupon_code, linked_advertisement_id, is_active, created_by)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+              coupon_code, linked_advertisement_id, is_active, created_by,
+              inactive_days, target_network)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
              RETURNING *`,
             [
                 name, description || null, reward_amount,
@@ -34,7 +36,9 @@ class PromotionService {
                 min_transaction_amount || 0, required_service || null,
                 eligibility || "FIRST_TRANSACTION",
                 coupon_code || null, linked_advertisement_id || null,
-                Boolean(is_active), adminEmail || null
+                Boolean(is_active), adminEmail || null,
+                inactive_days ? Number(inactive_days) : null,
+                target_network ? String(target_network).toUpperCase() : null
             ]
         );
 
@@ -50,7 +54,8 @@ class PromotionService {
             max_claims_per_user: "max_claims_per_user", start_date: "start_date",
             expiry_date: "expiry_date", min_transaction_amount: "min_transaction_amount",
             required_service: "required_service", eligibility: "eligibility",
-            coupon_code: "coupon_code", linked_advertisement_id: "linked_advertisement_id"
+            coupon_code: "coupon_code", linked_advertisement_id: "linked_advertisement_id",
+            inactive_days: "inactive_days", target_network: "target_network"
         };
 
         const setClauses = [];
@@ -59,8 +64,11 @@ class PromotionService {
 
         for (const [key, column] of Object.entries(allowed)) {
             if (Object.prototype.hasOwnProperty.call(fields, key)) {
+                let v = fields[key];
+                if (key === "inactive_days") v = (v === "" || v === null) ? null : Number(v);
+                if (key === "target_network") v = v ? String(v).toUpperCase() : null;
                 setClauses.push(`${column} = $${i}`);
-                values.push(fields[key]);
+                values.push(v);
                 i += 1;
             }
         }
@@ -153,9 +161,20 @@ class PromotionService {
                  WHERE user_id = $1 AND status = 'CREDITED'
                  GROUP BY promotion_id
              ) rl ON rl.promotion_id = p.id
+             LEFT JOIN LATERAL (
+                 SELECT network AS last_network, created_at AS last_success_at
+                 FROM transactions t
+                 WHERE t.user_id = $1 AND t.status = 'successful'
+                 ORDER BY t.created_at DESC
+                 LIMIT 1
+             ) ut ON true
              WHERE p.is_active = true
                AND p.start_date <= now()
                AND p.expiry_date >= now()
+               AND (p.inactive_days IS NULL
+                    OR ut.last_success_at IS NULL
+                    OR ut.last_success_at < now() - (p.inactive_days || ' days')::interval)
+               AND (p.target_network IS NULL OR p.target_network = ut.last_network)
              ORDER BY p.created_at DESC`,
             [userId]
         );
